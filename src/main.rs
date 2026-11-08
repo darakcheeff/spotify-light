@@ -21,15 +21,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting SpotifyLight (Native Rust + Slint, Zero-Electron)...");
 
-    // Initialize Audio Engine
-    let (audio_engine, mut rx) = AudioEngine::new();
+    // Initialize Audio Engine with Self-Healing Output Supervisor
+    let (audio_engine, rx) = AudioEngine::new();
     let audio_sender = audio_engine.clone();
 
-    // Background task for audio events
+    // Background Audio Supervisor (handles PipeWire/PulseAudio restarts and device disconnections)
+    let supervisor_cmd_tx = audio_engine.command_sender();
     tokio::spawn(async move {
-        while let Some(cmd) = rx.recv().await {
-            info!("Executing audio engine cmd: {:?}", cmd);
-        }
+        AudioEngine::run_supervisor_loop(rx, supervisor_cmd_tx).await;
     });
 
     // Initialize Speaker Discovery (Google Home, Connect)

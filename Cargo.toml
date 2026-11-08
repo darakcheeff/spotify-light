@@ -14,8 +14,8 @@ slint = { version = "1.9", default-features = false, features = ["compat-1-2", "
 # Async runtime
 tokio = { version = "1.40", features = ["full"] }
 
-# Audio & Spotify Core
-librespot = { version = "0.6", default-features = false, features = ["alsa-backend", "pulseaudio-backend"] }
+# Audio & Spotify Core (using git repo with upstream vergen build fix)
+librespot = { git = "https://github.com/librespot-org/librespot.git", default-features = false, features = ["alsa-backend", "pulseaudio-backend"] }
 
 # HTTP & Spotify Web API
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

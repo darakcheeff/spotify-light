@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 use librespot::core::authentication::Credentials;
 use librespot::core::config::SessionConfig;
 use librespot::core::session::Session;
@@ -11,6 +12,10 @@ pub struct SavedCredentials {
     pub username: String,
     pub password: Option<String>,
     pub token: Option<String>,
+    #[serde(default)]
+    pub refresh_token: Option<String>,
+    #[serde(default)]
+    pub client_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -221,13 +226,63 @@ p { color: #b3b3b3; font-size: 15px; }
     let username = session.username().to_string();
     info!("[OAUTH SUCCESS] Authenticated as user '{}' via OAuth PKCE", username);
 
+    let refresh_token_opt = if token.refresh_token.is_empty() {
+        None
+    } else {
+        Some(token.refresh_token.clone())
+    };
+
     let _ = save_credentials(&SavedCredentials {
         username: username.clone(),
         password: None,
         token: Some(token.access_token.clone()),
+        refresh_token: refresh_token_opt,
+        client_id: Some(client_id.to_string()),
     });
 
     Ok((session, token.access_token))
+}
+
+pub async fn refresh_access_token(client_id: &str, refresh_token: &str) -> Result<(String, Option<String>), String> {
+    info!("[OAUTH] Refreshing Spotify access token using refresh_token...");
+    let client = reqwest::Client::new();
+    let params = [
+        ("grant_type", "refresh_token"),
+        ("refresh_token", refresh_token),
+        ("client_id", client_id),
+    ];
+    let res = client.post("https://accounts.spotify.com/api/token")
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| {
+            error!("[OAUTH REFRESH ERROR] Failed to send refresh request: {}", e);
+            format!("Ошибка сети при обновлении токена: {}", e)
+        })?;
+
+    let status = res.status();
+    if !status.is_success() {
+        let err_body = res.text().await.unwrap_or_default();
+        error!("[OAUTH REFRESH ERROR] Spotify returned status {}: {}", status, err_body);
+        return Err(format!("Не удалось обновить токен ({}): {}", status, err_body));
+    }
+
+    let json: serde_json::Value = res.json().await.map_err(|e| {
+        error!("[OAUTH REFRESH ERROR] Failed to parse JSON: {}", e);
+        format!("Ошибка парсинга ответа токена: {}", e)
+    })?;
+
+    let new_access_token = json.get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Missing access_token in response".to_string())?
+        .to_string();
+
+    let new_refresh_token = json.get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    info!("[OAUTH REFRESH SUCCESS] Successfully acquired refreshed access token");
+    Ok((new_access_token, new_refresh_token))
 }
 
 #[derive(Clone)]
@@ -244,31 +299,54 @@ impl SpotifyApiClient {
         }
     }
 
+    async fn send_with_retry(&self, url: &str) -> Result<serde_json::Value, String> {
+        let mut attempts = 0;
+        let max_attempts = 4;
+
+        loop {
+            attempts += 1;
+            let res = self.client.get(url)
+                .bearer_auth(&self.access_token)
+                .send()
+                .await
+                .map_err(|e| {
+                    error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
+                    format!("Сетевая ошибка: {}", e)
+                })?;
+
+            let status = res.status();
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS && attempts <= max_attempts {
+                let delay = res.headers()
+                    .get("Retry-After")
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(2)
+                    .clamp(1, 15);
+                warn!("[API RATE LIMIT] Status 429 on {}. Retrying in {} seconds (attempt {}/{})...", url, delay, attempts, max_attempts);
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                continue;
+            }
+
+            if !status.is_success() {
+                let body = res.text().await.unwrap_or_default();
+                error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
+                return Err(format!("Spotify API error {}: {}", status, body));
+            }
+
+            let json: serde_json::Value = res.json().await.map_err(|e| {
+                error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
+                format!("Ошибка парсинга ответа: {}", e)
+            })?;
+
+            return Ok(json);
+        }
+    }
+
     pub async fn get_current_user(&self) -> Result<String, String> {
         let url = "https://api.spotify.com/v1/me";
         info!("[API] Fetching current user profile from {}", url);
 
-        let res = self.client.get(url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
-                format!("Сетевая ошибка: {}", e)
-            })?;
-
-        let status = res.status();
-        if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
-            error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
-            return Err(format!("Spotify API returned status {}: {}", status, body));
-        }
-
-        let json: serde_json::Value = res.json().await.map_err(|e| {
-            error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
-            format!("Ошибка парсинга ответа: {}", e)
-        })?;
-
+        let json = self.send_with_retry(url).await?;
         let name = json.get("display_name")
             .and_then(|v| v.as_str())
             .or_else(|| json.get("id").and_then(|v| v.as_str()))
@@ -282,27 +360,7 @@ impl SpotifyApiClient {
         let url = "https://api.spotify.com/v1/me/playlists?limit=50";
         info!("[API] Fetching user playlists from {}", url);
 
-        let res = self.client.get(url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
-                format!("Сетевая ошибка: {}", e)
-            })?;
-
-        let status = res.status();
-        if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
-            error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
-            return Err(format!("Spotify API returned status {}: {}", status, body));
-        }
-
-        let json: serde_json::Value = res.json().await.map_err(|e| {
-            error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
-            format!("Ошибка парсинга ответа: {}", e)
-        })?;
-
+        let json = self.send_with_retry(url).await?;
         let items = json.get("items").and_then(|v| v.as_array());
         let mut list = Vec::new();
 
@@ -331,27 +389,7 @@ impl SpotifyApiClient {
         let url = format!("https://api.spotify.com/v1/playlists/{}/tracks?limit=100", playlist_id);
         info!("[API] Fetching tracks for playlist '{}' from {}", playlist_id, url);
 
-        let res = self.client.get(&url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
-                format!("Сетевая ошибка: {}", e)
-            })?;
-
-        let status = res.status();
-        if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
-            error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
-            return Err(format!("Spotify API returned status {}: {}", status, body));
-        }
-
-        let json: serde_json::Value = res.json().await.map_err(|e| {
-            error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
-            format!("Ошибка парсинга ответа: {}", e)
-        })?;
-
+        let json = self.send_with_retry(&url).await?;
         let items = json.get("items").and_then(|v| v.as_array());
         let mut tracks = Vec::new();
 

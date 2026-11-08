@@ -209,6 +209,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             username: email_str.clone(),
                             password: Some(pass_str),
                             token: None,
+                            refresh_token: None,
+                            client_id: None,
                         }) {
                             error!("[CONFIG ERROR] Could not save credentials to disk: {}", e);
                         }
@@ -304,39 +306,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok((session, access_token)) => {
                         info!("[AUTH SUCCESS] Browser OAuth succeeded!");
 
+                        let username = session.username().to_string();
                         let client = SpotifyApiClient::new(access_token);
-                        let mut display_name = session.username().to_string();
-
-                        if let Ok(name) = client.get_current_user().await {
-                            display_name = name;
+                        {
+                            let mut guard = api_client_lock.lock().await;
+                            *guard = Some(client.clone());
                         }
 
-                        if let Ok(playlists) = client.get_playlists().await {
-                            let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
-                                PlaylistItem {
-                                    id: p.id.into(),
-                                    title: p.title.into(),
-                                    subtitle: format!("Плейлист • {} треков", p.track_count).into(),
-                                    is_pinned: false,
-                                    is_active: false,
-                                }
-                            }).collect();
-
-                            let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                                ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
-                            });
-                        }
-
-                        let mut guard = api_client_lock.lock().await;
-                        *guard = Some(client);
-
-                        let disp = display_name;
+                        // Immediately mark user authenticated and close login dialog
+                        let u_name = username.clone();
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_auth_loading(false);
                             ui.set_auth_error("".into());
                             ui.set_is_authenticated(true);
                             ui.set_is_login_open(false);
-                            ui.set_user_display_name(disp.into());
+                            ui.set_user_display_name(u_name.into());
+                        });
+
+                        // Concurrently fetch profile name
+                        let app_weak_profile = app_weak.clone();
+                        let client_profile = client.clone();
+                        tokio::spawn(async move {
+                            if let Ok(name) = client_profile.get_current_user().await {
+                                let _ = app_weak_profile.upgrade_in_event_loop(move |ui| {
+                                    ui.set_user_display_name(name.into());
+                                });
+                            }
+                        });
+
+                        // Concurrently fetch user playlists
+                        let app_weak_playlists = app_weak.clone();
+                        tokio::spawn(async move {
+                            match client.get_playlists().await {
+                                Ok(playlists) => {
+                                    let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                        PlaylistItem {
+                                            id: p.id.into(),
+                                            title: p.title.into(),
+                                            subtitle: format!("Плейлист • {} треков", p.track_count).into(),
+                                            is_pinned: false,
+                                            is_active: false,
+                                        }
+                                    }).collect();
+
+                                    let _ = app_weak_playlists.upgrade_in_event_loop(move |ui| {
+                                        ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("[API ERROR] Failed to fetch playlists: {}", e);
+                                }
+                            }
                         });
                     }
                     Err(err) => {
@@ -380,31 +400,87 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let app_weak = app_weak.clone();
         let api_client_lock = Arc::clone(&active_api_client);
         tokio::spawn(async move {
-            if let Some(saved) = load_saved_credentials() {
+            if let Some(mut saved) = load_saved_credentials() {
                 info!("[STARTUP] Found saved credentials for '{}'. Attempting auto-login...", saved.username);
 
-                let res = if let Some(pwd) = &saved.password {
-                    connect_with_password(&saved.username, pwd).await
+                let auth_result: Result<(Session, String), String> = if let Some(pwd) = &saved.password {
+                    match connect_with_password(&saved.username, pwd).await {
+                        Ok(session) => {
+                            let scopes = "user-read-private,playlist-read-private";
+                            match session.token_provider().get_token(scopes).await {
+                                Ok(token) => Ok((session, token.access_token)),
+                                Err(e) => {
+                                    error!("[STARTUP ERROR] Password session token provider failed: {}", e);
+                                    Err(format!("Ошибка получения токена: {}", e))
+                                }
+                            }
+                        }
+                        Err(e) => Err(e),
+                    }
                 } else if let Some(tok) = &saved.token {
-                    connect_with_token(tok).await
+                    match connect_with_token(tok).await {
+                        Ok(session) => Ok((session, tok.clone())),
+                        Err(e) => {
+                            warn!("[STARTUP] Token session connection failed: {}. Checking if refresh_token is available...", e);
+                            if let (Some(rt), Some(cid)) = (&saved.refresh_token, &saved.client_id) {
+                                match api::refresh_access_token(cid, rt).await {
+                                    Ok((new_tok, maybe_new_rt)) => {
+                                        saved.token = Some(new_tok.clone());
+                                        if let Some(nrt) = maybe_new_rt {
+                                            saved.refresh_token = Some(nrt);
+                                        }
+                                        let _ = save_credentials(&saved);
+                                        match connect_with_token(&new_tok).await {
+                                            Ok(session) => Ok((session, new_tok)),
+                                            Err(e2) => Err(format!("Не удалось подключиться с новым токеном: {}", e2)),
+                                        }
+                                    }
+                                    Err(re) => Err(format!("Не удалось обновить токен: {}", re)),
+                                }
+                            } else {
+                                Err(format!("Токен устарел, и refresh_token отсутствует: {}", e))
+                            }
+                        }
+                    }
                 } else {
-                    Err("No saved password or token found".to_string())
+                    Err("В сохраненных данных отсутствует пароль или токен".to_string())
                 };
 
-                match res {
-                    Ok(session) => {
+                match auth_result {
+                    Ok((session, access_token)) => {
                         info!("[STARTUP SUCCESS] Auto-login succeeded for '{}'", saved.username);
-                        let scopes = "user-read-private,playlist-read-private";
-                        let mut display_name = saved.username.clone();
 
-                        match session.token_provider().get_token(scopes).await {
-                            Ok(token) => {
-                                let client = SpotifyApiClient::new(token.access_token);
-                                if let Ok(name) = client.get_current_user().await {
-                                    display_name = name;
-                                }
+                        let username = session.username().to_string();
+                        let client = SpotifyApiClient::new(access_token);
+                        {
+                            let mut guard = api_client_lock.lock().await;
+                            *guard = Some(client.clone());
+                        }
 
-                                if let Ok(playlists) = client.get_playlists().await {
+                        // Immediately unlock UI and close login dialog
+                        let u_name = username.clone();
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_is_authenticated(true);
+                            ui.set_is_login_open(false);
+                            ui.set_user_display_name(u_name.into());
+                        });
+
+                        // Concurrently fetch profile name
+                        let app_weak_profile = app_weak.clone();
+                        let client_profile = client.clone();
+                        tokio::spawn(async move {
+                            if let Ok(name) = client_profile.get_current_user().await {
+                                let _ = app_weak_profile.upgrade_in_event_loop(move |ui| {
+                                    ui.set_user_display_name(name.into());
+                                });
+                            }
+                        });
+
+                        // Concurrently fetch playlists
+                        let app_weak_playlists = app_weak.clone();
+                        tokio::spawn(async move {
+                            match client.get_playlists().await {
+                                Ok(playlists) => {
                                     let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
                                         PlaylistItem {
                                             id: p.id.into(),
@@ -415,29 +491,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         }
                                     }).collect();
 
-                                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                    let _ = app_weak_playlists.upgrade_in_event_loop(move |ui| {
                                         ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
                                     });
                                 }
-
-                                let mut guard = api_client_lock.lock().await;
-                                *guard = Some(client);
+                                Err(e) => {
+                                    error!("[API ERROR] Failed to fetch playlists during startup: {}", e);
+                                }
                             }
-                            Err(e) => {
-                                error!("[STARTUP ERROR] Auto-login session failed to get Web API token: {}", e);
-                            }
-                        }
-
-                        let disp = display_name;
-                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                            ui.set_is_authenticated(true);
-                            ui.set_is_login_open(false);
-                            ui.set_user_display_name(disp.into());
                         });
                     }
                     Err(e) => {
-                        error!("[STARTUP ERROR] Auto-login failed: {}. Clearing saved session and prompting login.", e);
-                        clear_saved_credentials();
+                        error!("[STARTUP ERROR] Auto-login failed: {}. Prompting login dialog.", e);
+                        if e.contains("revoked") || e.contains("Bad credentials") || e.contains("invalid") {
+                            clear_saved_credentials();
+                        }
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_is_authenticated(false);
                             ui.set_is_login_open(true);

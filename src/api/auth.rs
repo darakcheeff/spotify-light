@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use librespot::core::authentication::Credentials;
 use librespot::core::config::SessionConfig;
-use librespot::core::session::Session;
+pub use librespot::core::session::Session;
 use librespot::oauth::OAuthClientBuilder;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};

@@ -55,16 +55,20 @@ export component LoginDialog inherits Rectangle {
                 background: #e11d4822;
                 border-width: 1px;
                 border-color: #e11d48;
-                padding-left: 12px;
-                padding-right: 12px;
 
-                Text {
-                    text: root.error_message;
-                    color: #fda4af;
-                    font-size: 11px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    wrap: word-wrap;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+
+                    Text {
+                        text: root.error_message;
+                        color: #fda4af;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
                 }
             }
 

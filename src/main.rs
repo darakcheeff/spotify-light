@@ -10,7 +10,8 @@ use std::time::Duration;
 use audio::{AudioCommand, AudioEngine};
 use discovery::SpeakerDiscovery;
 use mpris::MprisService;
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use librespot::core::session::Session;
+use slint::{ComponentHandle, ModelRc, VecModel};
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 

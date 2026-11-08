@@ -21,13 +21,17 @@ use api::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .finish();
-    let _ = tracing::subscriber::set_global_default(subscriber);
+    // Initialize logging with unsuppressed stderr/stdout output
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,spotify_light=debug"));
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(false)
+        .init();
 
+    info!("============================================================");
     info!("Starting SpotifyLight (Native Rust + Slint, Zero-Electron)...");
+    info!("============================================================");
 
     // Initialize Audio Engine with Self-Healing Output Supervisor
     let (audio_engine, rx) = AudioEngine::new();
@@ -44,7 +48,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     speaker_discovery.start();
 
     // Initialize MPRIS2 (D-Bus)
-    let _ = MprisService::init().await;
+    if let Err(e) = MprisService::init().await {
+        error!("[DBUS ERROR] Failed to register MPRIS2 service: {}", e);
+    }
 
     // Build Slint UI
     let app = AppWindow::new()?;
@@ -57,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_play_pause({
         let engine = audio_sender.clone();
         move || {
+            info!("[UI ACTION] Play/Pause clicked");
             let engine = engine.clone();
             tokio::spawn(async move {
                 engine.send_command(AudioCommand::Toggle).await;
@@ -67,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_next_track({
         let engine = audio_sender.clone();
         move || {
+            info!("[UI ACTION] Next track clicked");
             let engine = engine.clone();
             tokio::spawn(async move {
                 engine.send_command(AudioCommand::Next).await;
@@ -77,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_prev_track({
         let engine = audio_sender.clone();
         move || {
+            info!("[UI ACTION] Previous track clicked");
             let engine = engine.clone();
             tokio::spawn(async move {
                 engine.send_command(AudioCommand::Prev).await;
@@ -87,6 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_seek_position({
         let engine = audio_sender.clone();
         move |pos| {
+            info!("[UI ACTION] Seek position requested: {:.2}", pos);
             let engine = engine.clone();
             tokio::spawn(async move {
                 engine.send_command(AudioCommand::Seek(pos)).await;
@@ -105,16 +115,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     app.on_select_connect_device(move |device_id| {
-        info!("Selected playback device: {}", device_id);
+        info!("[UI ACTION] Playback device selected: {}", device_id);
     });
 
     app.on_search_query(move |query| {
-        info!("Search query: {}", query);
+        info!("[UI ACTION] Search query entered: '{}'", query);
     });
 
     app.on_play_track({
         let engine = audio_sender.clone();
         move |track_id| {
+            info!("[UI ACTION] Play track clicked: {}", track_id);
             let engine = engine.clone();
             tokio::spawn(async move {
                 let spotify_uri = format!("spotify:track:{}", track_id);
@@ -128,6 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let api_client_lock = Arc::clone(&active_api_client);
         let app_weak = app_weak.clone();
         move |playlist_id| {
+            info!("[UI ACTION] Playlist selected: {}", playlist_id);
             let api_client_lock = Arc::clone(&api_client_lock);
             let app_weak = app_weak.clone();
             let p_id = playlist_id.to_string();
@@ -160,9 +172,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             });
                         }
                         Err(e) => {
-                            warn!("Failed to fetch playlist tracks: {}", e);
+                            error!("[API ERROR] Failed to fetch playlist tracks for '{}': {}", p_id, e);
                         }
                     }
+                } else {
+                    error!("[API ERROR] Cannot fetch playlist tracks: No active authenticated API client!");
                 }
             });
         }
@@ -170,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Auth Callback: Email submitted (pre-flight check)
     app.on_email_submitted(move |email| {
-        info!("Email submitted in login dialog: {}", email);
+        info!("[UI ACTION] Email entered in login dialog: {}", email);
     });
 
     // Auth Callback: Direct Password Login
@@ -184,48 +198,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let pass_str = password.to_string();
 
             tokio::spawn(async move {
-                info!("Attempting authentication for {}", email_str);
+                info!("[AUTH] Login requested for '{}'", email_str);
 
                 match connect_with_password(&email_str, &pass_str).await {
                     Ok(session) => {
-                        info!("Authentication successful for {}", email_str);
+                        info!("[AUTH] Authentication successful for '{}'", email_str);
 
                         // Save credentials locally for auto-login
-                        let _ = save_credentials(&SavedCredentials {
+                        if let Err(e) = save_credentials(&SavedCredentials {
                             username: email_str.clone(),
                             password: Some(pass_str),
                             token: None,
-                        });
+                        }) {
+                            error!("[CONFIG ERROR] Could not save credentials to disk: {}", e);
+                        }
 
                         // Request Spotify Web API token
                         let scopes = "user-read-private,playlist-read-private";
                         let mut display_name = email_str.clone();
 
-                        if let Ok(token) = session.token_provider().get_token(scopes).await {
-                            let client = SpotifyApiClient::new(token.access_token);
-                            if let Ok(name) = client.get_current_user().await {
-                                display_name = name;
-                            }
+                        match session.token_provider().get_token(scopes).await {
+                            Ok(token) => {
+                                let client = SpotifyApiClient::new(token.access_token);
+                                match client.get_current_user().await {
+                                    Ok(name) => { display_name = name; }
+                                    Err(e) => { error!("[API ERROR] Failed to fetch user profile: {}", e); }
+                                }
 
-                            // Fetch user playlists
-                            if let Ok(playlists) = client.get_playlists().await {
-                                let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
-                                    PlaylistItem {
-                                        id: p.id.into(),
-                                        title: p.title.into(),
-                                        subtitle: format!("Плейлист • {} треков", p.track_count).into(),
-                                        is_pinned: false,
-                                        is_active: false,
+                                match client.get_playlists().await {
+                                    Ok(playlists) => {
+                                        let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                            PlaylistItem {
+                                                id: p.id.into(),
+                                                title: p.title.into(),
+                                                subtitle: format!("Плейлист • {} треков", p.track_count).into(),
+                                                is_pinned: false,
+                                                is_active: false,
+                                            }
+                                        }).collect();
+
+                                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                            ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
+                                        });
                                     }
-                                }).collect();
+                                    Err(e) => {
+                                        error!("[API ERROR] Failed to fetch playlists: {}", e);
+                                    }
+                                }
 
-                                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                                    ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
-                                });
+                                let mut guard = api_client_lock.lock().await;
+                                *guard = Some(client);
                             }
-
-                            let mut guard = api_client_lock.lock().await;
-                            *guard = Some(client);
+                            Err(e) => {
+                                error!("[AUTH ERROR] Failed to get Spotify Web API access token: {}", e);
+                            }
                         }
 
                         let disp = display_name;
@@ -238,7 +264,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         });
                     }
                     Err(err) => {
-                        warn!("Login failed: {}", err);
+                        error!("[AUTH ERROR] Login failed for '{}': {}", email_str, err);
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_auth_loading(false);
                             ui.set_auth_error(err.into());
@@ -252,13 +278,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Auth Callback: OTP Email Code
     app.on_otp_submitted({
         let app_weak = app_weak.clone();
-        move |_email, _code| {
+        move |email, code| {
+            warn!("[AUTH OTP] OTP code submitted for '{}': {}", email, code);
             let app_weak = app_weak.clone();
             tokio::spawn(async move {
-                // Currently Spotify requires OAuth PKCE or Password for session tokens
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
                     ui.set_auth_loading(false);
-                    ui.set_auth_error("Для входа используйте пароль или кнопку 'Войти через браузер'".into());
+                    ui.set_auth_error("Для прямого входа используйте пароль или кнопку 'Войти через браузер'".into());
                 });
             });
         }
@@ -270,18 +296,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         move || {
             let app_weak = app_weak.clone();
             tokio::spawn(async move {
-                info!("Launching browser OAuth authentication...");
-                // Open Spotify OAuth URL in default browser
-                let client_id = "27929427018d4157a41285e656d0d218"; // Standard Spotify Web client
+                info!("[AUTH] Launching browser OAuth authentication...");
+                let client_id = "27929427018d4157a41285e656d0d218";
                 let redirect_uri = "http://127.0.0.1:8888/callback";
                 let auth_url = format!(
                     "https://accounts.spotify.com/authorize?client_id={}&response_type=token&redirect_uri={}&scope=user-read-private%20playlist-read-private%20user-read-playback-state%20user-modify-playback-state",
                     client_id, redirect_uri
                 );
 
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(&auth_url)
-                    .spawn();
+                match std::process::Command::new("xdg-open").arg(&auth_url).spawn() {
+                    Ok(_) => {
+                        info!("[AUTH] Successfully opened default browser with Spotify OAuth URL");
+                    }
+                    Err(e) => {
+                        error!("[SYSTEM ERROR] Failed to run xdg-open: {}. Please open manually: {}", e, auth_url);
+                    }
+                }
 
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
                     ui.set_auth_loading(false);
@@ -321,7 +351,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let api_client_lock = Arc::clone(&active_api_client);
         tokio::spawn(async move {
             if let Some(saved) = load_saved_credentials() {
-                info!("Found saved credentials for user: {}. Attempting auto-login...", saved.username);
+                info!("[STARTUP] Found saved credentials for '{}'. Attempting auto-login...", saved.username);
 
                 let res = if let Some(pwd) = &saved.password {
                     connect_with_password(&saved.username, pwd).await
@@ -333,34 +363,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 match res {
                     Ok(session) => {
-                        info!("Auto-login successful for {}", saved.username);
+                        info!("[STARTUP SUCCESS] Auto-login succeeded for '{}'", saved.username);
                         let scopes = "user-read-private,playlist-read-private";
                         let mut display_name = saved.username.clone();
 
-                        if let Ok(token) = session.token_provider().get_token(scopes).await {
-                            let client = SpotifyApiClient::new(token.access_token);
-                            if let Ok(name) = client.get_current_user().await {
-                                display_name = name;
+                        match session.token_provider().get_token(scopes).await {
+                            Ok(token) => {
+                                let client = SpotifyApiClient::new(token.access_token);
+                                if let Ok(name) = client.get_current_user().await {
+                                    display_name = name;
+                                }
+
+                                if let Ok(playlists) = client.get_playlists().await {
+                                    let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                        PlaylistItem {
+                                            id: p.id.into(),
+                                            title: p.title.into(),
+                                            subtitle: format!("Плейлист • {} треков", p.track_count).into(),
+                                            is_pinned: false,
+                                            is_active: false,
+                                        }
+                                    }).collect();
+
+                                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                        ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
+                                    });
+                                }
+
+                                let mut guard = api_client_lock.lock().await;
+                                *guard = Some(client);
                             }
-
-                            if let Ok(playlists) = client.get_playlists().await {
-                                let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
-                                    PlaylistItem {
-                                        id: p.id.into(),
-                                        title: p.title.into(),
-                                        subtitle: format!("Плейлист • {} треков", p.track_count).into(),
-                                        is_pinned: false,
-                                        is_active: false,
-                                    }
-                                }).collect();
-
-                                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                                    ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
-                                });
+                            Err(e) => {
+                                error!("[STARTUP ERROR] Auto-login session failed to get Web API token: {}", e);
                             }
-
-                            let mut guard = api_client_lock.lock().await;
-                            *guard = Some(client);
                         }
 
                         let disp = display_name;
@@ -371,7 +406,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         });
                     }
                     Err(e) => {
-                        warn!("Auto-login failed: {}. Opening login dialog...", e);
+                        error!("[STARTUP ERROR] Auto-login failed: {}. Clearing saved session and prompting login.", e);
                         clear_saved_credentials();
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_is_authenticated(false);
@@ -380,7 +415,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             } else {
-                info!("No saved credentials found. Prompting login dialog.");
+                info!("[STARTUP] No saved credentials found. Prompting login dialog.");
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
                     ui.set_is_authenticated(false);
                     ui.set_is_login_open(true);
@@ -392,5 +427,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Entering Slint UI event loop...");
     app.run()?;
 
+    info!("SpotifyLight exited cleanly.");
     Ok(())
 }

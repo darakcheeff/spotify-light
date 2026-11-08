@@ -3,7 +3,7 @@ use librespot::core::authentication::Credentials;
 use librespot::core::config::SessionConfig;
 use librespot::core::session::Session;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedCredentials {
@@ -38,45 +38,92 @@ pub fn get_credentials_path() -> Option<PathBuf> {
 }
 
 pub fn load_saved_credentials() -> Option<SavedCredentials> {
-    let path = get_credentials_path()?;
-    let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&content).ok()
+    let path = match get_credentials_path() {
+        Some(p) => p,
+        None => {
+            warn!("[CONFIG] Could not determine user config directory for spotify-light");
+            return None;
+        }
+    };
+
+    if !path.exists() {
+        info!("[CONFIG] No saved credentials found at {:?}", path);
+        return None;
+    }
+
+    match std::fs::read_to_string(&path) {
+        Ok(content) => match serde_json::from_str::<SavedCredentials>(&content) {
+            Ok(creds) => {
+                info!("[CONFIG] Successfully loaded saved credentials for user '{}' from {:?}", creds.username, path);
+                Some(creds)
+            }
+            Err(e) => {
+                error!("[CONFIG ERROR] Corrupted credentials file at {:?}: {}. Clearing damaged config...", path, e);
+                let _ = std::fs::remove_file(&path);
+                None
+            }
+        },
+        Err(e) => {
+            error!("[CONFIG ERROR] Failed to read credentials file at {:?}: {}", path, e);
+            None
+        }
+    }
 }
 
 pub fn save_credentials(creds: &SavedCredentials) -> Result<(), std::io::Error> {
     if let Some(path) = get_credentials_path() {
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                error!("[CONFIG ERROR] Failed to create config directory {:?}: {}", parent, e);
+                return Err(e);
+            }
         }
-        let content = serde_json::to_string_pretty(creds)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        std::fs::write(path, content)?;
-        info!("Saved user credentials to {:?}", path);
+        let content = match serde_json::to_string_pretty(creds) {
+            Ok(s) => s,
+            Err(e) => {
+                error!("[CONFIG ERROR] Failed to serialize credentials: {}", e);
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+            }
+        };
+
+        if let Err(e) = std::fs::write(&path, content) {
+            error!("[CONFIG ERROR] Failed to write credentials file {:?}: {}", path, e);
+            return Err(e);
+        }
+
+        info!("[CONFIG] User credentials successfully persisted to {:?}", path);
+    } else {
+        error!("[CONFIG ERROR] Cannot save credentials: No valid config directory available");
     }
     Ok(())
 }
 
 pub fn clear_saved_credentials() {
     if let Some(path) = get_credentials_path() {
-        let _ = std::fs::remove_file(path);
-        info!("Cleared saved credentials at {:?}", path);
+        if path.exists() {
+            if let Err(e) = std::fs::remove_file(&path) {
+                error!("[CONFIG ERROR] Failed to delete credentials file {:?}: {}", path, e);
+            } else {
+                info!("[CONFIG] Cleared saved credentials file at {:?}", path);
+            }
+        }
     }
 }
 
 pub async fn connect_with_password(username: &str, password: &str) -> Result<Session, String> {
-    info!("Connecting to Spotify with username/password for {}", username);
+    info!("[AUTH] Initiating authentication with username/password for: {}", username);
     let session_config = SessionConfig::default();
     let session = Session::new(session_config, None);
     let credentials = Credentials::with_password(username, password);
 
     match session.connect(credentials, false).await {
         Ok(_) => {
-            info!("Successfully authenticated session for {}", username);
+            info!("[AUTH SUCCESS] Successfully authenticated Spotify session for '{}'", username);
             Ok(session)
         }
         Err(e) => {
             let err_str = e.to_string();
-            error!("Authentication failed for {}: {}", username, err_str);
+            error!("[AUTH FAILURE] Authentication failed for '{}': {}", username, err_str);
             if err_str.to_lowercase().contains("bad credentials") || err_str.to_lowercase().contains("invalid") {
                 Err("Неверный логин или пароль".to_string())
             } else if err_str.to_lowercase().contains("challenge") || err_str.to_lowercase().contains("needs approval") {
@@ -89,18 +136,18 @@ pub async fn connect_with_password(username: &str, password: &str) -> Result<Ses
 }
 
 pub async fn connect_with_token(token: &str) -> Result<Session, String> {
-    info!("Connecting to Spotify with access token");
+    info!("[AUTH] Initiating authentication with access token");
     let session_config = SessionConfig::default();
     let session = Session::new(session_config, None);
     let credentials = Credentials::with_access_token(token);
 
     match session.connect(credentials, false).await {
         Ok(_) => {
-            info!("Successfully authenticated session with token");
+            info!("[AUTH SUCCESS] Successfully authenticated Spotify session with token");
             Ok(session)
         }
         Err(e) => {
-            error!("Token authentication failed: {}", e);
+            error!("[AUTH FAILURE] Token authentication failed: {}", e);
             Err(format!("Ошибка авторизации по токену: {}", e))
         }
     }
@@ -121,37 +168,64 @@ impl SpotifyApiClient {
     }
 
     pub async fn get_current_user(&self) -> Result<String, String> {
-        let res = self.client.get("https://api.spotify.com/v1/me")
+        let url = "https://api.spotify.com/v1/me";
+        info!("[API] Fetching current user profile from {}", url);
+
+        let res = self.client.get(url)
             .bearer_auth(&self.access_token)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
+                format!("Сетевая ошибка: {}", e)
+            })?;
 
-        if !res.status().is_success() {
-            return Err(format!("Spotify API error: {}", res.status()));
+        let status = res.status();
+        if !status.is_success() {
+            let body = res.text().await.unwrap_or_default();
+            error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
+            return Err(format!("Spotify API returned status {}: {}", status, body));
         }
 
-        let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        let json: serde_json::Value = res.json().await.map_err(|e| {
+            error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
+            format!("Ошибка парсинга ответа: {}", e)
+        })?;
+
         let name = json.get("display_name")
             .and_then(|v| v.as_str())
             .or_else(|| json.get("id").and_then(|v| v.as_str()))
             .unwrap_or("User");
 
+        info!("[API SUCCESS] Current user profile resolved: {}", name);
         Ok(name.to_string())
     }
 
     pub async fn get_playlists(&self) -> Result<Vec<SimplePlaylist>, String> {
-        let res = self.client.get("https://api.spotify.com/v1/me/playlists?limit=50")
+        let url = "https://api.spotify.com/v1/me/playlists?limit=50";
+        info!("[API] Fetching user playlists from {}", url);
+
+        let res = self.client.get(url)
             .bearer_auth(&self.access_token)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
+                format!("Сетевая ошибка: {}", e)
+            })?;
 
-        if !res.status().is_success() {
-            return Err(format!("Spotify API error: {}", res.status()));
+        let status = res.status();
+        if !status.is_success() {
+            let body = res.text().await.unwrap_or_default();
+            error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
+            return Err(format!("Spotify API returned status {}: {}", status, body));
         }
 
-        let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        let json: serde_json::Value = res.json().await.map_err(|e| {
+            error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
+            format!("Ошибка парсинга ответа: {}", e)
+        })?;
+
         let items = json.get("items").and_then(|v| v.as_array());
         let mut list = Vec::new();
 
@@ -172,22 +246,35 @@ impl SpotifyApiClient {
             }
         }
 
+        info!("[API SUCCESS] Retrieved {} playlists from Spotify", list.len());
         Ok(list)
     }
 
     pub async fn get_playlist_tracks(&self, playlist_id: &str) -> Result<Vec<SimpleTrack>, String> {
         let url = format!("https://api.spotify.com/v1/playlists/{}/tracks?limit=100", playlist_id);
+        info!("[API] Fetching tracks for playlist '{}' from {}", playlist_id, url);
+
         let res = self.client.get(&url)
             .bearer_auth(&self.access_token)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                error!("[API NETWORK ERROR] Failed to send request to {}: {}", url, e);
+                format!("Сетевая ошибка: {}", e)
+            })?;
 
-        if !res.status().is_success() {
-            return Err(format!("Spotify API error: {}", res.status()));
+        let status = res.status();
+        if !status.is_success() {
+            let body = res.text().await.unwrap_or_default();
+            error!("[API HTTP ERROR] GET {} returned status {}: {}", url, status, body);
+            return Err(format!("Spotify API returned status {}: {}", status, body));
         }
 
-        let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        let json: serde_json::Value = res.json().await.map_err(|e| {
+            error!("[API PARSE ERROR] Failed to parse JSON response from {}: {}", url, e);
+            format!("Ошибка парсинга ответа: {}", e)
+        })?;
+
         let items = json.get("items").and_then(|v| v.as_array());
         let mut tracks = Vec::new();
 
@@ -223,6 +310,7 @@ impl SpotifyApiClient {
             }
         }
 
+        info!("[API SUCCESS] Retrieved {} tracks for playlist '{}'", tracks.len(), playlist_id);
         Ok(tracks)
     }
 }

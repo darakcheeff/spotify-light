@@ -23,7 +23,7 @@ export component AppWindow inherits Window {
     in-out property <int> drawer_mode: 0; // 0: Queue, 1: Connect Devices
     in-out property <bool> is_login_open: false;
 
-    // Track playback state
+    // Track playback state (synchronized with Audio Engine via event loop)
     in-out property <string> active_track_title: "JOHN CENA";
     in-out property <string> active_track_artist: "Joey Valence & Brae";
     in-out property <string> current_time: "1:25";
@@ -33,7 +33,10 @@ export component AppWindow inherits Window {
     in-out property <bool> is_liked: true;
     in-out property <float> current_volume: 0.8;
 
-    // Callbacks to Rust
+    // Navigation history for Back / Forward
+    in-out property <int> history_index: 0;
+
+    // Callbacks to Rust backend
     callback play_pause();
     callback next_track();
     callback prev_track();
@@ -50,6 +53,11 @@ export component AppWindow inherits Window {
 
         // 1. Top Navigation Bar
         TopBar {
+            nav_back => {
+                if root.current_workspace > 0 {
+                    root.current_workspace = 0;
+                }
+            }
             nav_home => {
                 root.current_workspace = 0;
                 root.is_lyrics_open = false;
@@ -62,7 +70,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // 2. Middle Area (Sidebar + Center Workspace + Right Drawer)
+        // 2. Middle Area (Sidebar + Persistent Workspaces + Right Drawer)
         HorizontalLayout {
             vertical-stretch: 1;
             padding-left: 8px;
@@ -77,21 +85,30 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // Central Dynamic Workspace
+            // Central Workspace Stack
+            // Using visible property instead of 'if' prevents destruction of views,
+            // preserving scroll offsets, user inputs, and avoiding reallocation churn!
             Rectangle {
                 horizontal-stretch: 1;
                 border-radius: Theme.radius-medium;
                 clip: true;
 
-                if root.is_lyrics_open : LyricsView {
+                // View 1: Karaoke / Lyrics (on top when active)
+                LyricsView {
+                    visible: root.is_lyrics_open;
                     close_lyrics => { root.is_lyrics_open = false; }
                 }
 
-                if !root.is_lyrics_open && root.current_workspace == 0 : HomeView {
+                // View 2: Home Catalog (state preserved on navigation)
+                HomeView {
+                    visible: !root.is_lyrics_open && root.current_workspace == 0;
                     open_album(title) => { root.current_workspace = 1; }
                 }
 
-                if !root.is_lyrics_open && root.current_workspace == 1 : AlbumView {}
+                // View 3: Album / Playlist View
+                AlbumView {
+                    visible: !root.is_lyrics_open && root.current_workspace == 1;
+                }
             }
 
             // Right Drawer (Queue / Recently Played / Connect Devices)
@@ -102,7 +119,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // 3. Bottom Player Bar
+        // 3. Bottom Player Bar (Single source of truth)
         PlayerBar {
             track_title: root.active_track_title;
             track_artist: root.active_track_artist;
@@ -153,7 +170,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Modal Login Dialog
+    // Modal Login Dialog Overlay
     if root.is_login_open : LoginDialog {
         cancel => { root.is_login_open = false; }
         submit_password(email, pwd) => { root.login_requested(email, pwd); }

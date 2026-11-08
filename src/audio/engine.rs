@@ -15,6 +15,7 @@ pub enum AudioCommand {
     LoadUri(String),
 }
 
+#[derive(Clone)]
 pub struct AudioEngine {
     command_tx: mpsc::Sender<AudioCommand>,
     is_playing: Arc<AtomicBool>,

@@ -1,9 +1,10 @@
-import { Theme } from "../theme.slint";
+import { Theme, PlaylistItem } from "../theme.slint";
 
 export component HomeView inherits Rectangle {
     background: transparent;
     
     in property <bool> is_authenticated: false;
+    in property <[PlaylistItem]> playlists: [];
     in-out property <int> selected_chip: 0; // 0: Все, 1: Музыка, 2: Подкасты, 3: Аудиокниги
 
     callback play_card(string);
@@ -11,7 +12,7 @@ export component HomeView inherits Rectangle {
     callback login_clicked();
 
     Flickable {
-        content-height: 700px;
+        content-height: 800px;
 
         VerticalLayout {
             padding-left: 24px;
@@ -98,21 +99,81 @@ export component HomeView inherits Rectangle {
                 }
             }
 
-            // 3. Authenticated Content Placeholder (Real library feeds)
+            // 3. Authenticated Content (Playlists Catalog)
             if root.is_authenticated : VerticalLayout {
-                spacing: 20px;
+                spacing: 16px;
 
                 Text {
-                    text: "Главная";
+                    text: "Ваша медиатека";
                     color: Theme.text-primary;
                     font-size: 24px;
                     font-weight: 800;
                 }
 
-                Text {
-                    text: "Ваша музыка загружается...";
+                if root.playlists.length == 0 : Text {
+                    text: "Загрузка плейлистов...";
                     color: Theme.text-secondary;
                     font-size: 14px;
+                }
+
+                if root.playlists.length > 0 : VerticalLayout {
+                    spacing: 8px;
+                    for pl in root.playlists : Rectangle {
+                        height: 64px;
+                        border-radius: Theme.radius-medium;
+                        background: card_touch.has-hover ? Theme.background-hover : Theme.background-elevated;
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            spacing: 16px;
+                            alignment: center;
+
+                            Rectangle {
+                                width: 44px;
+                                height: 44px;
+                                border-radius: 4px;
+                                background: #282828;
+                                Text {
+                                    text: "♪";
+                                    color: Theme.accent;
+                                    font-size: 20px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                alignment: center;
+                                spacing: 2px;
+                                Text {
+                                    text: pl.title;
+                                    color: Theme.text-primary;
+                                    font-size: 15px;
+                                    font-weight: 700;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: pl.subtitle;
+                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                    overflow: elide;
+                                }
+                            }
+
+                            Text {
+                                text: "▶";
+                                color: Theme.accent;
+                                font-size: 16px;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        card_touch := TouchArea {
+                            clicked => { root.open_album(pl.id); }
+                        }
+                    }
                 }
             }
         }

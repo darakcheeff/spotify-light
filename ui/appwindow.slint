@@ -126,7 +126,11 @@ export component AppWindow inherits Window {
                 HomeView {
                     visible: !root.is_lyrics_open && root.current_workspace == 0;
                     is_authenticated: root.is_authenticated;
-                    open_album(title) => { root.current_workspace = 1; }
+                    playlists: root.user_playlists;
+                    open_album(id) => {
+                        root.current_workspace = 1;
+                        root.select_playlist(id);
+                    }
                     login_clicked => { root.is_login_open = true; }
                 }
 

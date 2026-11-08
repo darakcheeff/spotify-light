@@ -289,13 +289,15 @@ pub async fn refresh_access_token(client_id: &str, refresh_token: &str) -> Resul
 pub struct SpotifyApiClient {
     client: reqwest::Client,
     access_token: String,
+    username: String,
 }
 
 impl SpotifyApiClient {
-    pub fn new(access_token: String) -> Self {
+    pub fn new(access_token: String, username: String) -> Self {
         Self {
             client: reqwest::Client::new(),
             access_token,
+            username,
         }
     }
 
@@ -343,23 +345,117 @@ impl SpotifyApiClient {
     }
 
     pub async fn get_current_user(&self) -> Result<String, String> {
+        info!("[API] Fetching current user profile for '{}'...", self.username);
+
+        // 1. Native spclient profile endpoint (instant, unthrottled)
+        let sp_url = format!("https://spclient.wg.spotify.com/user-profile-view/v3/profile/{}", self.username);
+        if let Ok(res) = self.client.get(&sp_url)
+            .bearer_auth(&self.access_token)
+            .header("Accept", "application/json")
+            .send()
+            .await 
+        {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    if let Some(name) = json.get("name").and_then(|v| v.as_str()) {
+                        info!("[API SUCCESS] User profile resolved via spclient: {}", name);
+                        return Ok(name.to_string());
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to Web API
         let url = "https://api.spotify.com/v1/me";
-        info!("[API] Fetching current user profile from {}", url);
-
-        let json = self.send_with_retry(url).await?;
-        let name = json.get("display_name")
-            .and_then(|v| v.as_str())
-            .or_else(|| json.get("id").and_then(|v| v.as_str()))
-            .unwrap_or("User");
-
-        info!("[API SUCCESS] Current user profile resolved: {}", name);
-        Ok(name.to_string())
+        info!("[API] Falling back to Web API: {}", url);
+        match self.send_with_retry(url).await {
+            Ok(json) => {
+                let name = json.get("display_name")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| json.get("id").and_then(|v| v.as_str()))
+                    .unwrap_or(&self.username);
+                info!("[API SUCCESS] Current user profile resolved via Web API: {}", name);
+                Ok(name.to_string())
+            }
+            Err(_) => Ok(self.username.clone()),
+        }
     }
 
     pub async fn get_playlists(&self) -> Result<Vec<SimplePlaylist>, String> {
-        let url = "https://api.spotify.com/v1/me/playlists?limit=50";
-        info!("[API] Fetching user playlists from {}", url);
+        info!("[API] Fetching user playlists for '{}'...", self.username);
 
+        // 1. Native spclient rootlist (unthrottled, instant)
+        let sp_url = format!("https://spclient.wg.spotify.com/playlist/v2/user/{}/rootlist", self.username);
+        if let Ok(res) = self.client.get(&sp_url)
+            .bearer_auth(&self.access_token)
+            .header("Accept", "application/json")
+            .send()
+            .await 
+        {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    if let Some(items) = json.get("contents").and_then(|c| c.get("items")).and_then(|i| i.as_array()) {
+                        let mut pids = Vec::new();
+                        for item in items.iter().take(40) {
+                            if let Some(uri) = item.get("uri").and_then(|u| u.as_str()) {
+                                if let Some(pid) = uri.strip_prefix("spotify:playlist:") {
+                                    pids.push(pid.to_string());
+                                }
+                            }
+                        }
+
+                        let mut handles = Vec::new();
+                        for pid in pids {
+                            let client = self.client.clone();
+                            let token = self.access_token.clone();
+                            handles.push(tokio::spawn(async move {
+                                let p_url = format!("https://spclient.wg.spotify.com/playlist/v2/playlist/{}", pid);
+                                let mut title = format!("Плейлист {}", pid);
+                                let mut count = 0;
+
+                                if let Ok(pres) = client.get(&p_url)
+                                    .bearer_auth(&token)
+                                    .header("Accept", "application/json")
+                                    .send()
+                                    .await 
+                                {
+                                    if let Ok(pjson) = pres.json::<serde_json::Value>().await {
+                                        if let Some(name) = pjson.get("attributes").and_then(|a| a.get("name")).and_then(|n| n.as_str()) {
+                                            title = name.to_string();
+                                        }
+                                        if let Some(len) = pjson.get("length").and_then(|l| l.as_i64()) {
+                                            count = len as i32;
+                                        }
+                                    }
+                                }
+
+                                SimplePlaylist {
+                                    id: pid,
+                                    title,
+                                    track_count: count,
+                                }
+                            }));
+                        }
+
+                        let mut list = Vec::new();
+                        for h in handles {
+                            if let Ok(pl) = h.await {
+                                list.push(pl);
+                            }
+                        }
+
+                        if !list.is_empty() {
+                            info!("[API SUCCESS] Retrieved {} playlists via spclient", list.len());
+                            return Ok(list);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to Web API
+        let url = "https://api.spotify.com/v1/me/playlists?limit=50";
+        info!("[API] Falling back to Web API: {}", url);
         let json = self.send_with_retry(url).await?;
         let items = json.get("items").and_then(|v| v.as_array());
         let mut list = Vec::new();
@@ -381,14 +477,100 @@ impl SpotifyApiClient {
             }
         }
 
-        info!("[API SUCCESS] Retrieved {} playlists from Spotify", list.len());
+        info!("[API SUCCESS] Retrieved {} playlists from Spotify Web API", list.len());
         Ok(list)
     }
 
     pub async fn get_playlist_tracks(&self, playlist_id: &str) -> Result<Vec<SimpleTrack>, String> {
-        let url = format!("https://api.spotify.com/v1/playlists/{}/tracks?limit=100", playlist_id);
-        info!("[API] Fetching tracks for playlist '{}' from {}", playlist_id, url);
+        info!("[API] Fetching tracks for playlist '{}'...", playlist_id);
 
+        // 1. Native spclient playlist contents (unthrottled)
+        let sp_url = format!("https://spclient.wg.spotify.com/playlist/v2/playlist/{}", playlist_id);
+        if let Ok(res) = self.client.get(&sp_url)
+            .bearer_auth(&self.access_token)
+            .header("Accept", "application/json")
+            .send()
+            .await 
+        {
+            if res.status().is_success() {
+                if let Ok(pjson) = res.json::<serde_json::Value>().await {
+                    if let Some(items) = pjson.get("contents").and_then(|c| c.get("items")).and_then(|i| i.as_array()) {
+                        let mut track_ids = Vec::new();
+                        for item in items.iter().take(100) {
+                            if let Some(uri) = item.get("uri").and_then(|u| u.as_str()) {
+                                if let Some(tid) = uri.strip_prefix("spotify:track:") {
+                                    track_ids.push(tid.to_string());
+                                }
+                            }
+                        }
+
+                        let mut handles = Vec::new();
+                        for (idx, tid) in track_ids.into_iter().enumerate() {
+                            let client = self.client.clone();
+                            let token = self.access_token.clone();
+                            handles.push(tokio::spawn(async move {
+                                let cred_url = format!("https://spclient.wg.spotify.com/track-credits-view/v0/experimental/{}/credits", tid);
+                                let mut title = format!("Трек {}", idx + 1);
+                                let mut artist = "Неизвестный исполнитель".to_string();
+
+                                if let Ok(cres) = client.get(&cred_url)
+                                    .bearer_auth(&token)
+                                    .header("Accept", "application/json")
+                                    .send()
+                                    .await 
+                                {
+                                    if let Ok(cjson) = cres.json::<serde_json::Value>().await {
+                                        if let Some(t) = cjson.get("trackTitle").and_then(|v| v.as_str()) {
+                                            title = t.to_string();
+                                        }
+                                        if let Some(roles) = cjson.get("roleCredits").and_then(|v| v.as_array()) {
+                                            for role in roles {
+                                                if let Some(title_role) = role.get("roleTitle").and_then(|v| v.as_str()) {
+                                                    if title_role.eq_ignore_ascii_case("Performers") || title_role.eq_ignore_ascii_case("Artists") {
+                                                        if let Some(arts) = role.get("artists").and_then(|a| a.as_array()) {
+                                                            if let Some(first_art) = arts.first() {
+                                                                if let Some(aname) = first_art.get("name").and_then(|n| n.as_str()) {
+                                                                    artist = aname.to_string();
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                SimpleTrack {
+                                    id: tid,
+                                    index: (idx + 1) as i32,
+                                    title,
+                                    artist,
+                                    album: "".to_string(),
+                                    duration_str: "".to_string(),
+                                }
+                            }));
+                        }
+
+                        let mut tracks = Vec::new();
+                        for h in handles {
+                            if let Ok(t) = h.await {
+                                tracks.push(t);
+                            }
+                        }
+
+                        if !tracks.is_empty() {
+                            info!("[API SUCCESS] Retrieved {} tracks via spclient for playlist '{}'", tracks.len(), playlist_id);
+                            return Ok(tracks);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to Web API
+        let url = format!("https://api.spotify.com/v1/playlists/{}/tracks?limit=100", playlist_id);
+        info!("[API] Falling back to Web API for tracks: {}", url);
         let json = self.send_with_retry(&url).await?;
         let items = json.get("items").and_then(|v| v.as_array());
         let mut tracks = Vec::new();

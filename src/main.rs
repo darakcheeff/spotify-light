@@ -63,11 +63,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // UI Callbacks: Audio
     app.on_play_pause({
         let engine = audio_sender.clone();
+        let app_weak = app_weak.clone();
         move || {
             info!("[UI ACTION] Play/Pause clicked");
             let engine = engine.clone();
+            let app_weak = app_weak.clone();
             tokio::spawn(async move {
                 engine.send_command(AudioCommand::Toggle).await;
+                let playing = engine.is_playing();
+                let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_is_playing(playing);
+                });
             });
         }
     });
@@ -125,12 +131,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     app.on_play_track({
         let engine = audio_sender.clone();
+        let app_weak = app_weak.clone();
         move |track_id| {
             info!("[UI ACTION] Play track clicked: {}", track_id);
             let engine = engine.clone();
+            let app_weak = app_weak.clone();
             tokio::spawn(async move {
                 let spotify_uri = format!("spotify:track:{}", track_id);
                 engine.send_command(AudioCommand::LoadUri(spotify_uri)).await;
+                let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_is_playing(true);
+                });
             });
         }
     });
@@ -168,7 +179,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }).collect();
 
+                            let p_title = p_id.clone();
                             let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_current_workspace(1);
+                                ui.set_current_album_title(format!("Плейлист {}", p_title).into());
                                 ui.set_current_tracks(ModelRc::new(VecModel::from(slint_tracks)));
                             });
                         }
@@ -192,9 +206,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_login_requested({
         let app_weak = app_weak.clone();
         let api_client_lock = Arc::clone(&active_api_client);
+        let engine = audio_sender.clone();
         move |email, password| {
             let app_weak = app_weak.clone();
             let api_client_lock = Arc::clone(&api_client_lock);
+            let engine = engine.clone();
             let email_str = email.to_string();
             let pass_str = password.to_string();
 
@@ -204,6 +220,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match connect_with_password(&email_str, &pass_str).await {
                     Ok(session) => {
                         info!("[AUTH] Authentication successful for '{}'", email_str);
+
+                        // Connect playback engine
+                        engine.init_session(session.clone()).await;
 
                         // Save credentials locally for auto-login
                         if let Err(e) = save_credentials(&SavedCredentials {
@@ -222,7 +241,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         match session.token_provider().get_token(scopes).await {
                             Ok(token) => {
-                                let client = SpotifyApiClient::new(token.access_token);
+                                let client = SpotifyApiClient::new(token.access_token, email_str.clone());
                                 match client.get_current_user().await {
                                     Ok(name) => { display_name = name; }
                                     Err(e) => { error!("[API ERROR] Failed to fetch user profile: {}", e); }
@@ -297,9 +316,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_browser_login_requested({
         let app_weak = app_weak.clone();
         let api_client_lock = Arc::clone(&active_api_client);
+        let engine = audio_sender.clone();
         move || {
             let app_weak = app_weak.clone();
             let api_client_lock = Arc::clone(&api_client_lock);
+            let engine = engine.clone();
             tokio::spawn(async move {
                 info!("[AUTH] Browser OAuth flow initiated by user");
 
@@ -308,11 +329,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         info!("[AUTH SUCCESS] Browser OAuth succeeded!");
 
                         let username = session.username().to_string();
-                        let client = SpotifyApiClient::new(access_token);
+                        let client = SpotifyApiClient::new(access_token, username.clone());
                         {
                             let mut guard = api_client_lock.lock().await;
                             *guard = Some(client.clone());
                         }
+
+                        // Connect playback engine
+                        engine.init_session(session.clone()).await;
 
                         // Immediately mark user authenticated and close login dialog
                         let u_name = username.clone();
@@ -400,6 +424,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let app_weak = app_weak.clone();
         let api_client_lock = Arc::clone(&active_api_client);
+        let engine = audio_sender.clone();
         tokio::spawn(async move {
             if let Some(mut saved) = load_saved_credentials() {
                 info!("[STARTUP] Found saved credentials for '{}'. Attempting auto-login...", saved.username);
@@ -451,8 +476,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok((session, access_token)) => {
                         info!("[STARTUP SUCCESS] Auto-login succeeded for '{}'", saved.username);
 
+                        // Connect playback engine
+                        engine.init_session(session.clone()).await;
+
                         let username = session.username().to_string();
-                        let client = SpotifyApiClient::new(access_token);
+                        let client = SpotifyApiClient::new(access_token, username.clone());
                         {
                             let mut guard = api_client_lock.lock().await;
                             *guard = Some(client.clone());

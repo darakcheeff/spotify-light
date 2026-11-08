@@ -1,9 +1,18 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
 use tracing::{error, info, warn};
+
+use librespot::core::session::Session;
+use librespot::core::SpotifyUri;
+use librespot::playback::{
+    audio_backend,
+    config::{AudioFormat, PlayerConfig},
+    mixer::NoOpVolume,
+    player::Player,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioSinkState {
@@ -26,26 +35,135 @@ pub enum AudioCommand {
     RecoverSink,
 }
 
+fn create_player(session: Session) -> Option<Arc<Player>> {
+    let backend = match audio_backend::find(None) {
+        Some(b) => b,
+        None => {
+            error!("[AUDIO ERROR] No compatible audio backend found (PulseAudio/ALSA/PipeWire)");
+            return None;
+        }
+    };
+
+    let player_config = PlayerConfig::default();
+    let audio_format = AudioFormat::default();
+    let player = Player::new(
+        player_config,
+        session,
+        Box::new(NoOpVolume),
+        move || backend(None, audio_format),
+    );
+    Some(player)
+}
+
 #[derive(Clone)]
 pub struct AudioEngine {
     command_tx: mpsc::Sender<AudioCommand>,
     is_playing: Arc<AtomicBool>,
+    session: Arc<Mutex<Option<Session>>>,
+    player: Arc<Mutex<Option<Arc<Player>>>>,
 }
 
 impl AudioEngine {
     pub fn new() -> (Self, mpsc::Receiver<AudioCommand>) {
         let (command_tx, rx) = mpsc::channel(32);
         let is_playing = Arc::new(AtomicBool::new(false));
+        let session = Arc::new(Mutex::new(None));
+        let player = Arc::new(Mutex::new(None));
 
-        (Self { command_tx, is_playing }, rx)
+        (
+            Self {
+                command_tx,
+                is_playing,
+                session,
+                player,
+            },
+            rx,
+        )
     }
 
     pub fn command_sender(&self) -> mpsc::Sender<AudioCommand> {
         self.command_tx.clone()
     }
 
+    pub async fn init_session(&self, session: Session) {
+        info!("[AUDIO] Connecting native playback engine to Spotify AP session...");
+        if let Some(player) = create_player(session.clone()) {
+            let mut p_guard = self.player.lock().await;
+            *p_guard = Some(player);
+
+            let mut s_guard = self.session.lock().await;
+            *s_guard = Some(session);
+
+            info!("[AUDIO SUCCESS] Playback engine initialized and ready for streaming!");
+        }
+    }
+
     pub async fn send_command(&self, cmd: AudioCommand) {
         info!("Audio command dispatched: {:?}", cmd);
+        match &cmd {
+            AudioCommand::Play => {
+                let p_guard = self.player.lock().await;
+                if let Some(p) = p_guard.as_ref() {
+                    p.play();
+                    self.is_playing.store(true, Ordering::Relaxed);
+                }
+            }
+            AudioCommand::Pause => {
+                let p_guard = self.player.lock().await;
+                if let Some(p) = p_guard.as_ref() {
+                    p.pause();
+                    self.is_playing.store(false, Ordering::Relaxed);
+                }
+            }
+            AudioCommand::Toggle => {
+                let playing = self.is_playing.load(Ordering::Relaxed);
+                let p_guard = self.player.lock().await;
+                if let Some(p) = p_guard.as_ref() {
+                    if playing {
+                        p.pause();
+                        self.is_playing.store(false, Ordering::Relaxed);
+                    } else {
+                        p.play();
+                        self.is_playing.store(true, Ordering::Relaxed);
+                    }
+                }
+            }
+            AudioCommand::LoadUri(uri) => {
+                let p_guard = self.player.lock().await;
+                if let Some(p) = p_guard.as_ref() {
+                    match SpotifyUri::from_uri(uri) {
+                        Ok(sp_uri) => {
+                            info!("[AUDIO] Loading track: {}", uri);
+                            p.load(sp_uri, true, 0);
+                            self.is_playing.store(true, Ordering::Relaxed);
+                        }
+                        Err(e) => {
+                            error!("[AUDIO ERROR] Failed to parse Spotify URI '{}': {}", uri, e);
+                        }
+                    }
+                } else {
+                    warn!("[AUDIO WARNING] Cannot load track: Playback engine not yet initialized with active session!");
+                }
+            }
+            AudioCommand::Seek(pos) => {
+                let p_guard = self.player.lock().await;
+                if let Some(p) = p_guard.as_ref() {
+                    p.seek((*pos * 1000.0) as u32);
+                }
+            }
+            AudioCommand::RecoverSink => {
+                warn!("[AUDIO SUPERVISOR] Audio sink reconnection requested...");
+                let s_guard = self.session.lock().await;
+                if let Some(session) = s_guard.as_ref() {
+                    if let Some(new_player) = create_player(session.clone()) {
+                        let mut p_guard = self.player.lock().await;
+                        *p_guard = Some(new_player);
+                        info!("[AUDIO SUPERVISOR] Audio backend successfully re-established!");
+                    }
+                }
+            }
+            _ => {}
+        }
         let _ = self.command_tx.send(cmd).await;
     }
 
@@ -60,7 +178,6 @@ impl AudioEngine {
         mut rx: mpsc::Receiver<AudioCommand>,
         command_tx: mpsc::Sender<AudioCommand>,
     ) {
-
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 AudioCommand::RecoverSink => {
@@ -97,9 +214,8 @@ impl AudioEngine {
                 }
                 other_cmd => {
                     info!("Executing audio engine command: {:?}", other_cmd);
-                    // If command fails due to broken audio pipe / server dropped, trigger self-recovery:
-                    let execution_failed_due_to_broken_pipe = false;
-                    if execution_failed_due_to_broken_pipe {
+                    // Check health
+                    if !Self::probe_audio_sink() {
                         let _ = command_tx.send(AudioCommand::RecoverSink).await;
                     }
                 }
@@ -109,7 +225,6 @@ impl AudioEngine {
 
     /// Probes if the system sound server (PipeWire, PulseAudio, or ALSA) is reachable and ready to accept streams.
     fn probe_audio_sink() -> bool {
-        // In full implementation, opens a non-blocking test stream to default sink
-        true
+        audio_backend::find(None).is_some()
     }
 }

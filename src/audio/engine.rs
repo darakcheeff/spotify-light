@@ -60,13 +60,13 @@ impl AudioEngine {
         mut rx: mpsc::Receiver<AudioCommand>,
         command_tx: mpsc::Sender<AudioCommand>,
     ) {
-        let mut sink_state = AudioSinkState::Active;
 
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 AudioCommand::RecoverSink => {
                     warn!("Audio sink lost or broken pipe detected. Initiating recovery loop...");
-                    sink_state = AudioSinkState::Reconnecting;
+                    let mut current_state = AudioSinkState::Reconnecting;
+                    info!("Audio sink state transition: {:?}", current_state);
 
                     let mut retry_delay = Duration::from_millis(500);
                     let max_delay = Duration::from_secs(5);
@@ -79,13 +79,15 @@ impl AudioEngine {
                         // Try re-probing and re-opening the PipeWire/PulseAudio output stream
                         if Self::probe_audio_sink() {
                             info!("Audio output successfully re-established!");
-                            sink_state = AudioSinkState::Active;
+                            current_state = AudioSinkState::Active;
+                            info!("Audio sink restored: {:?}", current_state);
                             break;
                         }
 
                         if attempts >= 20 {
                             error!("Failed to recover audio sink after 20 attempts. Retrying in background...");
-                            sink_state = AudioSinkState::DeviceLost;
+                            current_state = AudioSinkState::DeviceLost;
+                            warn!("Audio sink state: {:?}", current_state);
                             break;
                         }
 

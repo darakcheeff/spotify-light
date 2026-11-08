@@ -142,10 +142,8 @@ export component AlbumView inherits Rectangle {
                 spacing: 8px;
 
                 // Table Header
-                Rectangle {
-                    height: 36px;
-                    border-bottom-width: 1px;
-                    border-color: Theme.border-color;
+                VerticalLayout {
+                    spacing: 6px;
 
                     HorizontalLayout {
                         padding-left: 12px;
@@ -157,6 +155,11 @@ export component AlbumView inherits Rectangle {
                         Text { horizontal-stretch: 1; text: "Название"; color: Theme.text-secondary; font-size: 12px; }
                         Text { width: 140px; text: "Прослушивания"; color: Theme.text-secondary; font-size: 12px; }
                         Text { width: 60px; text: "🕒"; color: Theme.text-secondary; font-size: 12px; horizontal-alignment: right; }
+                    }
+
+                    Rectangle {
+                        height: 1px;
+                        background: Theme.border-color;
                     }
                 }
 

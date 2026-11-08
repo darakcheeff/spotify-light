@@ -53,32 +53,40 @@ export component RightDrawer inherits Rectangle {
 
                 // Tab: Очередь
                 Rectangle {
-                    height: 28px;
-                    border-bottom-width: root.queue_tab == 0 ? 2px : 0px;
-                    border-color: Theme.accent;
-                    
-                    Text {
-                        text: "Очередь";
-                        color: root.queue_tab == 0 ? Theme.text-primary : Theme.text-secondary;
-                        font-size: 14px;
-                        font-weight: 700;
-                        vertical-alignment: center;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        Text {
+                            text: "Очередь";
+                            color: root.queue_tab == 0 ? Theme.text-primary : Theme.text-secondary;
+                            font-size: 14px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+                        Rectangle {
+                            height: 2px;
+                            background: root.queue_tab == 0 ? Theme.accent : transparent;
+                        }
                     }
                     TouchArea { clicked => { root.queue_tab = 0; } }
                 }
 
                 // Tab: Недавно прослушано
                 Rectangle {
-                    height: 28px;
-                    border-bottom-width: root.queue_tab == 1 ? 2px : 0px;
-                    border-color: Theme.accent;
-
-                    Text {
-                        text: "Недавно прослушано";
-                        color: root.queue_tab == 1 ? Theme.text-primary : Theme.text-secondary;
-                        font-size: 14px;
-                        font-weight: 700;
-                        vertical-alignment: center;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        Text {
+                            text: "Недавно прослушано";
+                            color: root.queue_tab == 1 ? Theme.text-primary : Theme.text-secondary;
+                            font-size: 14px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+                        Rectangle {
+                            height: 2px;
+                            background: root.queue_tab == 1 ? Theme.accent : transparent;
+                        }
                     }
                     TouchArea { clicked => { root.queue_tab = 1; } }
                 }

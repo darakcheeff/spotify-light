@@ -12,7 +12,7 @@ export component HomeView inherits Rectangle {
     callback login_clicked();
 
     Flickable {
-        content-height: 800px;
+        content-height: (root.playlists.length * 68px) + 320px;
 
         VerticalLayout {
             padding-left: 24px;

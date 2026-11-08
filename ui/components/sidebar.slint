@@ -114,6 +114,7 @@ export component Sidebar inherits Rectangle {
         // Playlists list inside Flickable
         if root.playlists.length > 0 : Flickable {
             vertical-stretch: 1;
+            content-height: root.playlists.length * 60px;
             
             VerticalLayout {
                 spacing: 4px;

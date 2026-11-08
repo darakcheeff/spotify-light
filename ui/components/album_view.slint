@@ -15,7 +15,7 @@ export component AlbumView inherits Rectangle {
     callback like_track(string);
 
     Flickable {
-        content-height: 850px;
+        content-height: (root.tracks.length * 56px) + 420px;
 
         VerticalLayout {
             // 1. Hero Header with Gradient

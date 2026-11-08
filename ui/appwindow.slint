@@ -139,6 +139,11 @@ export component AppWindow inherits Window {
                     visible: !root.is_lyrics_open && root.current_workspace == 1;
                     album_title: root.current_album_title;
                     tracks: root.current_tracks;
+                    play_all => {
+                        if (root.current_tracks.length > 0) {
+                            root.play_track(root.current_tracks[0].id);
+                        }
+                    }
                     track_clicked(id) => { root.play_track(id); }
                 }
             }

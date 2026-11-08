@@ -136,11 +136,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("[UI ACTION] Play track clicked: {}", track_id);
             let engine = engine.clone();
             let app_weak = app_weak.clone();
+            let tid = track_id.to_string();
             tokio::spawn(async move {
-                let spotify_uri = format!("spotify:track:{}", track_id);
+                let spotify_uri = format!("spotify:track:{}", tid);
                 engine.send_command(AudioCommand::LoadUri(spotify_uri)).await;
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
                     ui.set_is_playing(true);
+                    let tracks_model = ui.get_current_tracks();
+                    for idx in 0..tracks_model.row_count() {
+                        if let Some(track) = tracks_model.row_data(idx) {
+                            if track.id == tid {
+                                ui.set_active_track_title(track.title);
+                                ui.set_active_track_artist(track.artist);
+                                break;
+                            }
+                        }
+                    }
                 });
             });
         }
@@ -179,10 +190,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }).collect();
 
-                            let p_title = p_id.clone();
+                            let p_id_copy = p_id.clone();
                             let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                let mut title_to_show = format!("Плейлист {}", p_id_copy);
+                                let playlists_model = ui.get_user_playlists();
+                                for idx in 0..playlists_model.row_count() {
+                                    if let Some(pl) = playlists_model.row_data(idx) {
+                                        if pl.id == p_id_copy {
+                                            title_to_show = pl.title.to_string();
+                                            break;
+                                        }
+                                    }
+                                }
                                 ui.set_current_workspace(1);
-                                ui.set_current_album_title(format!("Плейлист {}", p_title).into());
+                                ui.set_current_album_title(title_to_show.into());
                                 ui.set_current_tracks(ModelRc::new(VecModel::from(slint_tracks)));
                             });
                         }

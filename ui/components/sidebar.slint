@@ -186,19 +186,21 @@ export component Sidebar inherits Rectangle {
             alignment: center;
             spacing: 12px;
 
-            Rectangle {
-                width: 64px;
-                height: 64px;
-                border-radius: 32px;
-                background: Theme.background-elevated;
-                horizontal-alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 32px;
+                    background: Theme.background-elevated;
 
-                Text {
-                    text: "♪";
-                    font-size: 28px;
-                    color: Theme.text-secondary;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                    Text {
+                        text: "♪";
+                        font-size: 28px;
+                        color: Theme.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
                 }
             }
 
@@ -218,23 +220,25 @@ export component Sidebar inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            if !root.is_authenticated : Rectangle {
-                width: 140px;
-                height: 36px;
-                border-radius: 18px;
-                background: Theme.accent;
-                horizontal-alignment: center;
+            if !root.is_authenticated : HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 140px;
+                    height: 36px;
+                    border-radius: 18px;
+                    background: Theme.accent;
 
-                Text {
-                    text: "Войти";
-                    color: #000000;
-                    font-size: 13px;
-                    font-weight: 700;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                    Text {
+                        text: "Войти";
+                        color: #000000;
+                        font-size: 13px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea { clicked => { root.login_clicked(); } }
                 }
-
-                TouchArea { clicked => { root.login_clicked(); } }
             }
         }
     }

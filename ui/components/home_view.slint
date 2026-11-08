@@ -73,24 +73,26 @@ export component HomeView inherits Rectangle {
                         wrap: word-wrap;
                     }
 
-                    Rectangle {
-                        width: 180px;
-                        height: 48px;
-                        border-radius: 24px;
-                        background: login_btn.has-hover ? Theme.accent-hover : Theme.accent;
-                        horizontal-alignment: center;
+                    HorizontalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 180px;
+                            height: 48px;
+                            border-radius: 24px;
+                            background: login_btn.has-hover ? Theme.accent-hover : Theme.accent;
 
-                        Text {
-                            text: "Войти в Spotify";
-                            color: #000000;
-                            font-size: 15px;
-                            font-weight: 700;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
+                            Text {
+                                text: "Войти в Spotify";
+                                color: #000000;
+                                font-size: 15px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
 
-                        login_btn := TouchArea {
-                            clicked => { root.login_clicked(); }
+                            login_btn := TouchArea {
+                                clicked => { root.login_clicked(); }
+                            }
                         }
                     }
                 }

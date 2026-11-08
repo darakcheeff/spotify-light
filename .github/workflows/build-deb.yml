@@ -10,37 +10,29 @@ on:
 
 jobs:
   build-deb:
-    name: Build Universal DEB (glibc 2.31 Compatible)
-    runs-on: ubuntu-latest
-    container:
-      image: debian:bullseye-slim # Pinned glibc 2.31 for universal Debian 11/12/13 and Linux Mint 20/21/22 support
+    name: Build Universal DEB Package
+    runs-on: ubuntu-22.04
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Install System Dependencies
         run: |
-          apt-get update && apt-get install -y --no-install-recommends \
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends \
             build-essential \
-            curl \
-            git \
             pkg-config \
             libssl-dev \
             libasound2-dev \
             libpulse-dev \
             libdbus-1-dev \
-            libfontconfig1-dev \
-            ca-certificates
+            libfontconfig1-dev
 
-      - name: Install Rust Toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Compile Release Binary
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
           cargo build --release
           strip target/release/spotify-light
 

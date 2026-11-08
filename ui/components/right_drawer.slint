@@ -9,29 +9,13 @@ export component RightDrawer inherits Rectangle {
     in-out property <int> queue_tab: 0; // 0: Очередь, 1: Недавно прослушано
     
     in property <TrackItem> current_track: {
-        id: "cur", index: 1, title: "Spoiler - Recoil", artist: "Hyper, WARGASM (UK)",
-        album: "Cyberpunk 2077", duration_str: "4:00", play_count_str: "", is_liked: true, is_playing: true
+        id: "", index: 0, title: "", artist: "",
+        album: "", duration_str: "", play_count_str: "", is_liked: false, is_playing: false
     };
     
-    in property <[TrackItem]> queue_items: [
-        { id: "q1", index: 1, title: "JOHN CENA", artist: "Joey Valence & Brae", album: "", duration_str: "2:43", play_count_str: "", is_liked: false, is_playing: false },
-        { id: "q2", index: 2, title: "Pray For My Enemies", artist: "Le Castle Vania, Hyper", album: "", duration_str: "3:10", play_count_str: "", is_liked: false, is_playing: false },
-        { id: "q3", index: 3, title: "ENEMIES", artist: "WHO SHOT SCOTT", album: "", duration_str: "2:55", play_count_str: "", is_liked: false, is_playing: false },
-        { id: "q4", index: 4, title: "SiNSation SELLebration", artist: "Alla Xul Elu", album: "", duration_str: "3:30", play_count_str: "", is_liked: false, is_playing: false },
-    ];
-    
-    in property <[TrackItem]> recent_items: [
-        { id: "r1", index: 1, title: "Killshot", artist: "Frost", album: "", duration_str: "2:18", play_count_str: "", is_liked: true, is_playing: false },
-        { id: "r2", index: 2, title: "call you out", artist: "Frost", album: "", duration_str: "3:07", play_count_str: "", is_liked: false, is_playing: false },
-        { id: "r3", index: 3, title: "Engel (Live in Mexico City)", artist: "Rammstein", album: "", duration_str: "5:12", play_count_str: "", is_liked: true, is_playing: false },
-    ];
-
-    in property <[DeviceItem]> devices: [
-        { id: "dev1", name: "Этот компьютер", device_type: "computer", is_active: true },
-        { id: "dev2", name: "Google Home (Кухня)", device_type: "speaker", is_active: false },
-        { id: "dev3", name: "ELS-NX9 (Смартфон)", device_type: "smartphone", is_active: false },
-        { id: "dev4", name: "Living Room TV", device_type: "tv", is_active: false },
-    ];
+    in property <[TrackItem]> queue_items: [];
+    in property <[TrackItem]> recent_items: [];
+    in property <[DeviceItem]> devices: [];
 
     callback close_drawer();
     callback select_device(string);
@@ -115,94 +99,114 @@ export component RightDrawer inherits Rectangle {
             if root.queue_tab == 0 : VerticalLayout {
                 spacing: 10px;
 
-                Text {
-                    text: "Сейчас играет";
-                    color: Theme.text-secondary;
-                    font-size: 12px;
-                    font-weight: 700;
-                }
+                if root.current_track.title != "" : VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: "Сейчас играет";
+                        color: Theme.text-secondary;
+                        font-size: 12px;
+                        font-weight: 700;
+                    }
 
-                // Now Playing Card
-                Rectangle {
-                    height: 60px;
-                    border-radius: 6px;
-                    background: Theme.background-elevated;
+                    Rectangle {
+                        height: 60px;
+                        border-radius: 6px;
+                        background: Theme.background-elevated;
 
-                    HorizontalLayout {
-                        padding: 8px;
-                        spacing: 12px;
-                        alignment: center;
-
-                        Rectangle {
-                            width: 44px;
-                            height: 44px;
-                            border-radius: 4px;
-                            background: #333333;
-                            Text {
-                                text: "▶";
-                                color: Theme.accent;
-                                font-size: 16px;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-
-                        VerticalLayout {
-                            horizontal-stretch: 1;
+                        HorizontalLayout {
+                            padding: 8px;
+                            spacing: 12px;
                             alignment: center;
-                            spacing: 2px;
 
-                            Text {
-                                text: root.current_track.title;
-                                color: Theme.accent;
-                                font-size: 14px;
-                                font-weight: 700;
-                                overflow: elide;
+                            Rectangle {
+                                width: 44px;
+                                height: 44px;
+                                border-radius: 4px;
+                                background: #333333;
+                                Text {
+                                    text: "▶";
+                                    color: Theme.accent;
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
                             }
-                            Text {
-                                text: root.current_track.artist;
-                                color: Theme.text-secondary;
-                                font-size: 12px;
-                                overflow: elide;
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                alignment: center;
+                                spacing: 2px;
+
+                                Text {
+                                    text: root.current_track.title;
+                                    color: Theme.accent;
+                                    font-size: 14px;
+                                    font-weight: 700;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: root.current_track.artist;
+                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                    overflow: elide;
+                                }
                             }
                         }
                     }
                 }
 
+                // Next up in Queue
                 Text {
-                    text: "Далее";
+                    text: "Далее в очереди";
                     color: Theme.text-secondary;
                     font-size: 12px;
                     font-weight: 700;
                 }
 
-                Flickable {
+                if root.queue_items.length == 0 : VerticalLayout {
+                    padding-top: 32px;
+                    spacing: 8px;
+                    alignment: center;
+
+                    Text {
+                        text: "В очереди пока пусто";
+                        color: Theme.text-primary;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Добавьте треки в очередь или включите плейлист";
+                        color: Theme.text-secondary;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+
+                if root.queue_items.length > 0 : Flickable {
                     vertical-stretch: 1;
+                    content-height: 400px;
+
                     VerticalLayout {
                         spacing: 4px;
+
                         for item in root.queue_items : Rectangle {
-                            height: 52px;
+                            height: 48px;
                             border-radius: 4px;
                             background: q_item_touch.has-hover ? Theme.background-hover : transparent;
 
                             HorizontalLayout {
-                                padding-left: 6px;
-                                padding-right: 6px;
-                                spacing: 10px;
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 12px;
                                 alignment: center;
 
-                                Rectangle {
-                                    width: 38px;
-                                    height: 38px;
-                                    border-radius: 4px;
-                                    background: #262626;
-                                    Text {
-                                        text: "♪";
-                                        color: Theme.text-secondary;
-                                        font-size: 16px;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                    }
+                                Text {
+                                    width: 16px;
+                                    text: item.index;
+                                    color: Theme.text-secondary;
+                                    font-size: 12px;
                                 }
 
                                 VerticalLayout {
@@ -224,6 +228,12 @@ export component RightDrawer inherits Rectangle {
                                         overflow: elide;
                                     }
                                 }
+
+                                Text {
+                                    text: item.duration_str;
+                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                }
                             }
 
                             q_item_touch := TouchArea {
@@ -234,45 +244,48 @@ export component RightDrawer inherits Rectangle {
                 }
             }
 
-            // Tab 1: Recently Played History
+            // Tab 1: Recently Played
             if root.queue_tab == 1 : VerticalLayout {
                 spacing: 10px;
 
-                Text {
-                    text: "История прослушиваний";
-                    color: Theme.text-secondary;
-                    font-size: 12px;
-                    font-weight: 700;
+                if root.recent_items.length == 0 : VerticalLayout {
+                    padding-top: 32px;
+                    spacing: 8px;
+                    alignment: center;
+
+                    Text {
+                        text: "История прослушивания пуста";
+                        color: Theme.text-primary;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Здесь появятся недавно воспроизведенные треки";
+                        color: Theme.text-secondary;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
                 }
 
-                Flickable {
+                if root.recent_items.length > 0 : Flickable {
                     vertical-stretch: 1;
+                    content-height: 400px;
+
                     VerticalLayout {
                         spacing: 4px;
+
                         for item in root.recent_items : Rectangle {
-                            height: 52px;
+                            height: 48px;
                             border-radius: 4px;
                             background: r_item_touch.has-hover ? Theme.background-hover : transparent;
 
                             HorizontalLayout {
-                                padding-left: 6px;
-                                padding-right: 6px;
-                                spacing: 10px;
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 12px;
                                 alignment: center;
-
-                                Rectangle {
-                                    width: 38px;
-                                    height: 38px;
-                                    border-radius: 4px;
-                                    background: #262626;
-                                    Text {
-                                        text: "♪";
-                                        color: Theme.text-secondary;
-                                        font-size: 16px;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                    }
-                                }
 
                                 VerticalLayout {
                                     horizontal-stretch: 1;
@@ -336,100 +349,127 @@ export component RightDrawer inherits Rectangle {
                 }
             }
 
-            // Jam banner
-            Rectangle {
-                height: 64px;
-                border-radius: 8px;
-                background: Theme.background-elevated;
-
-                HorizontalLayout {
-                    padding: 10px;
-                    spacing: 10px;
-                    alignment: center;
-
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 2px;
-                        Text {
-                            text: "Слушай с друзьями";
-                            color: Theme.text-primary;
-                            font-size: 12px;
-                            font-weight: 600;
-                        }
-                        Text {
-                            text: "где угодно";
-                            color: Theme.text-secondary;
-                            font-size: 11px;
-                        }
-                    }
-
-                    Rectangle {
-                        width: 100px;
-                        height: 32px;
-                        border-radius: 16px;
-                        background: jam_touch.has-hover ? #f0f0f0 : #ffffff;
-
-                        Text {
-                            text: "Начать джем";
-                            color: #000000;
-                            font-size: 11px;
-                            font-weight: 700;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-
-                        jam_touch := TouchArea { clicked => { root.start_jam(); } }
-                    }
-                }
-            }
-
+            // Current Device
             Text {
-                text: "Доступные устройства";
+                text: "Текущее устройство";
                 color: Theme.text-secondary;
                 font-size: 12px;
                 font-weight: 700;
             }
 
-            // Devices List inside Flickable
-            Flickable {
+            Rectangle {
+                height: 56px;
+                border-radius: 6px;
+                background: Theme.background-elevated;
+
+                HorizontalLayout {
+                    padding: 12px;
+                    spacing: 12px;
+                    alignment: center;
+
+                    Text {
+                        text: "💻";
+                        font-size: 20px;
+                    }
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: "Этот компьютер";
+                            color: Theme.accent;
+                            font-size: 14px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: "SpotifyLight (PipeWire / ALSA)";
+                            color: Theme.text-secondary;
+                            font-size: 11px;
+                        }
+                    }
+
+                    Text {
+                        text: "🔊";
+                        color: Theme.accent;
+                        font-size: 16px;
+                    }
+                }
+            }
+
+            // Select another device
+            Text {
+                text: "Выберите устройство в сети";
+                color: Theme.text-secondary;
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            if root.devices.length == 0 : VerticalLayout {
+                padding-top: 24px;
+                spacing: 8px;
+                alignment: center;
+
+                Text {
+                    text: "Поиск устройств...";
+                    color: Theme.text-primary;
+                    font-size: 14px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "Колонки Spotify Connect и Google Cast в вашей локальной сети появятся здесь автоматически";
+                    color: Theme.text-secondary;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+
+            if root.devices.length > 0 : Flickable {
                 vertical-stretch: 1;
+                content-height: 300px;
+
                 VerticalLayout {
                     spacing: 6px;
+
                     for dev in root.devices : Rectangle {
-                        height: 56px;
+                        height: 52px;
                         border-radius: 6px;
-                        background: dev.is_active ? Theme.background-elevated : (dev_touch.has-hover ? Theme.background-hover : transparent);
+                        background: dev_touch.has-hover ? Theme.background-hover : transparent;
 
                         HorizontalLayout {
-                            padding-left: 12px;
-                            padding-right: 12px;
-                            spacing: 14px;
+                            padding: 12px;
+                            spacing: 12px;
                             alignment: center;
 
                             Text {
-                                text: dev.device_type == "speaker" ? "🔊" : (dev.device_type == "tv" ? "📺" : (dev.device_type == "smartphone" ? "📱" : "💻"));
+                                text: dev.device_type == "speaker" ? "📢" : (dev.device_type == "tv" ? "📺" : "📱");
                                 font-size: 18px;
-                                vertical-alignment: center;
                             }
 
                             VerticalLayout {
                                 horizontal-stretch: 1;
                                 alignment: center;
                                 spacing: 2px;
-
                                 Text {
                                     text: dev.name;
                                     color: dev.is_active ? Theme.accent : Theme.text-primary;
-                                    font-size: 14px;
-                                    font-weight: dev.is_active ? 700 : 500;
+                                    font-size: 13px;
+                                    font-weight: 600;
                                     overflow: elide;
                                 }
-
-                                if dev.is_active : Text {
-                                    text: "Spotify Connect • Воспроизведение здесь";
-                                    color: Theme.accent;
+                                Text {
+                                    text: dev.device_type == "speaker" ? "Google Cast / Connect" : "Удаленное устройство";
+                                    color: Theme.text-secondary;
                                     font-size: 11px;
                                 }
+                            }
+
+                            if dev.is_active : Text {
+                                text: "✔";
+                                color: Theme.accent;
+                                font-size: 14px;
                             }
                         }
 
@@ -438,14 +478,6 @@ export component RightDrawer inherits Rectangle {
                         }
                     }
                 }
-            }
-
-            // Bottom link
-            Text {
-                text: "Твоего устройства здесь нет? ↗";
-                color: Theme.text-muted;
-                font-size: 11px;
-                horizontal-alignment: center;
             }
         }
     }

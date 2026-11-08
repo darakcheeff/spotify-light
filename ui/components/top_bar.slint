@@ -5,7 +5,8 @@ export component TopBar inherits Rectangle {
     background: Theme.background;
     
     in-out property <string> search_text: "";
-    in-out property <string> user_name: "L";
+    in-out property <bool> is_authenticated: false;
+    in-out property <string> user_name: "";
     
     callback nav_back();
     callback nav_forward();
@@ -72,29 +73,27 @@ export component TopBar inherits Rectangle {
             height: 48px;
             border-radius: 24px;
             background: home_touch.has-hover ? Theme.background-hover : Theme.background-secondary;
-            
+
             Text {
-                text: "⌂";
-                color: Theme.text-primary;
-                font-size: 20px;
+                text: "🏠";
+                font-size: 18px;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
-            
+
             home_touch := TouchArea {
                 clicked => { root.nav_home(); }
             }
         }
 
-        // Search bar
+        // Search Bar
         Rectangle {
-            horizontal-stretch: 1;
-            max-width: 480px;
+            width: 420px;
             height: 48px;
             border-radius: 24px;
-            background: search_touch.has-hover ? Theme.background-elevated : Theme.background-secondary;
+            background: Theme.background-elevated;
             border-width: 1px;
-            border-color: search_input.has-focus ? Theme.text-primary : transparent;
+            border-color: search_input.has-focus ? Theme.text-primary : Theme.border-color;
 
             HorizontalLayout {
                 padding-left: 16px;
@@ -105,17 +104,17 @@ export component TopBar inherits Rectangle {
                 Text {
                     text: "🔍";
                     font-size: 16px;
-                    color: Theme.text-secondary;
                     vertical-alignment: center;
                 }
 
                 search_input := TextInput {
-                    horizontal-stretch: 1;
                     text <=> root.search_text;
                     color: Theme.text-primary;
                     font-size: 14px;
                     vertical-alignment: center;
-                    edited => { root.search_changed(self.text); }
+                    edited => {
+                        root.search_changed(self.text);
+                    }
                 }
 
                 if root.search_text == "" : Text {
@@ -125,19 +124,17 @@ export component TopBar inherits Rectangle {
                     vertical-alignment: center;
                 }
             }
-
-            search_touch := TouchArea {}
         }
 
         // Spacer
         Rectangle { horizontal-stretch: 1; }
 
-        // Right side: Notifications, Profile
+        // Right side: Notifications, Profile / Login
         HorizontalLayout {
             spacing: 12px;
             alignment: center;
 
-            Rectangle {
+            if root.is_authenticated : Rectangle {
                 width: 36px;
                 height: 36px;
                 border-radius: 18px;
@@ -155,8 +152,8 @@ export component TopBar inherits Rectangle {
                 }
             }
 
-            // User Avatar
-            Rectangle {
+            // User Avatar when logged in
+            if root.is_authenticated : Rectangle {
                 width: 36px;
                 height: 36px;
                 border-radius: 18px;
@@ -165,7 +162,7 @@ export component TopBar inherits Rectangle {
                 border-color: avatar_touch.has-hover ? Theme.text-primary : transparent;
 
                 Text {
-                    text: root.user_name;
+                    text: root.user_name != "" ? root.user_name : "U";
                     color: Theme.text-primary;
                     font-size: 14px;
                     font-weight: 700;
@@ -174,6 +171,27 @@ export component TopBar inherits Rectangle {
                 }
 
                 avatar_touch := TouchArea {
+                    clicked => { root.profile_clicked(); }
+                }
+            }
+
+            // "Войти" button when unauthenticated
+            if !root.is_authenticated : Rectangle {
+                width: 90px;
+                height: 36px;
+                border-radius: 18px;
+                background: login_btn_touch.has-hover ? Theme.accent-hover : Theme.accent;
+
+                Text {
+                    text: "Войти";
+                    color: #000000;
+                    font-size: 13px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                login_btn_touch := TouchArea {
                     clicked => { root.profile_clicked(); }
                 }
             }

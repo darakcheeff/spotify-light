@@ -3,19 +3,7 @@ import { Theme, LyricLine } from "../theme.slint";
 export component LyricsView inherits Rectangle {
     background: @linear-gradient(180deg, #102693 0%, #0a113c 100%);
     
-    in property <[LyricLine]> lyrics: [
-        { time_ms: 10000, text: "Get down and get low", is_active: false },
-        { time_ms: 14000, text: "Get with it, uh", is_active: false },
-        { time_ms: 18000, text: "John Cena, the way I'm bing chilling", is_active: false },
-        { time_ms: 22000, text: "Bitch can't rap, it's best you stay hidden", is_active: false },
-        { time_ms: 25000, text: "We off the ice vanilla, I stay with it", is_active: false },
-        { time_ms: 29000, text: "Talk your shit, we get it, you don't get it", is_active: true },
-        { time_ms: 33000, text: "This a theme song, turn the beat on", is_active: false },
-        { time_ms: 37000, text: "Just picked up yo' mama in the Nissan", is_active: false },
-        { time_ms: 41000, text: "She call me Ben 10, got the green on", is_active: false },
-        { time_ms: 45000, text: "I pass her to the homie, turn the heat on", is_active: false },
-        { time_ms: 49000, text: "I am not your average rapper", is_active: false },
-    ];
+    in property <[LyricLine]> lyrics: [];
 
     callback close_lyrics();
 
@@ -28,6 +16,27 @@ export component LyricsView inherits Rectangle {
             padding-top: 48px;
             padding-bottom: 96px;
             spacing: 24px;
+
+            if root.lyrics.length == 0 : VerticalLayout {
+                padding-top: 120px;
+                alignment: center;
+                spacing: 16px;
+
+                Text {
+                    text: "Текст песни недоступен";
+                    color: #ffffff;
+                    font-size: 28px;
+                    font-weight: 800;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Для текущего трека слова пока не найдены";
+                    color: #5267a6;
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                }
+            }
 
             for line in root.lyrics : Text {
                 text: line.text;

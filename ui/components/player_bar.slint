@@ -4,13 +4,13 @@ export component PlayerBar inherits Rectangle {
     height: 80px;
     background: Theme.background;
     
-    in property <string> track_title: "JOHN CENA";
-    in property <string> track_artist: "Joey Valence & Brae";
-    in property <string> current_time_str: "1:25";
-    in property <string> total_time_str: "2:43";
-    in property <float> progress: 0.52; // 0.0 .. 1.0
-    in property <bool> is_playing: true;
-    in property <bool> is_liked: true;
+    in property <string> track_title: "";
+    in property <string> track_artist: "";
+    in property <string> current_time_str: "0:00";
+    in property <string> total_time_str: "0:00";
+    in property <float> progress: 0.0; // 0.0 .. 1.0
+    in property <bool> is_playing: false;
+    in property <bool> is_liked: false;
     in property <bool> is_shuffle: false;
     in property <bool> is_repeat: false;
     in property <float> volume: 0.8; // 0.0 .. 1.0
@@ -53,7 +53,7 @@ export component PlayerBar inherits Rectangle {
                 background: #282828;
 
                 Text {
-                    text: "♪";
+                    text: root.track_title != "" ? "♪" : "";
                     font-size: 24px;
                     color: Theme.text-secondary;
                     horizontal-alignment: center;
@@ -68,23 +68,23 @@ export component PlayerBar inherits Rectangle {
                 spacing: 4px;
 
                 Text {
-                    text: root.track_title;
-                    color: Theme.text-primary;
+                    text: root.track_title != "" ? root.track_title : "Ничего не играет";
+                    color: root.track_title != "" ? Theme.text-primary : Theme.text-muted;
                     font-size: 14px;
                     font-weight: 600;
                     overflow: elide;
                 }
 
                 Text {
-                    text: root.track_artist;
-                    color: Theme.text-secondary;
+                    text: root.track_artist != "" ? root.track_artist : "Выберите трек или плейлист";
+                    color: Theme.text-muted;
                     font-size: 12px;
                     overflow: elide;
                 }
             }
 
             // Like Button (Heart / Checkmark)
-            Rectangle {
+            if root.track_title != "" : Rectangle {
                 width: 32px;
                 height: 32px;
                 border-radius: 16px;

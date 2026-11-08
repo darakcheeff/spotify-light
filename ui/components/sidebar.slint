@@ -5,24 +5,14 @@ export component Sidebar inherits Rectangle {
     background: Theme.background-secondary;
     border-radius: Theme.radius-medium;
     
-    in property <[PlaylistItem]> playlists: [
-        { id: "1", title: "Любимые треки", subtitle: "Плейлист • Закреплено", is_pinned: true, is_active: false },
-        { id: "2", title: "Coffee Table Jazz", subtitle: "Плейлист • Spotify", is_pinned: true, is_active: false },
-        { id: "3", title: "Жадан і Собаки", subtitle: "Исполнитель", is_pinned: false, is_active: false },
-        { id: "4", title: "Опп", subtitle: "Плейлист", is_pinned: false, is_active: false },
-        { id: "5", title: "Chris Benstead", subtitle: "Исполнитель", is_pinned: false, is_active: false },
-        { id: "6", title: "Гребенщиков", subtitle: "Плейлист", is_pinned: false, is_active: false },
-        { id: "7", title: "Оффлайн", subtitle: "Плейлист", is_pinned: false, is_active: false },
-        { id: "8", title: "Die Antwoord", subtitle: "Плейлист", is_pinned: false, is_active: false },
-        { id: "9", title: "Neverlove", subtitle: "Плейлист", is_pinned: false, is_active: false },
-    ];
-    
+    in property <[PlaylistItem]> playlists: [];
+    in property <bool> is_authenticated: false;
     in-out property <int> selected_filter: 0; // 0: Все, 1: Плейлисты, 2: Подкасты, 3: Альбомы, 4: Исполнители
     
     callback create_clicked();
     callback filter_selected(int);
     callback playlist_selected(string);
-    callback playlist_context_menu(string, length, length);
+    callback login_clicked();
 
     VerticalLayout {
         padding: 12px;
@@ -41,7 +31,7 @@ export component Sidebar inherits Rectangle {
                 horizontal-stretch: 1;
             }
 
-            Rectangle {
+            if root.is_authenticated : Rectangle {
                 width: 90px;
                 height: 32px;
                 border-radius: 16px;
@@ -68,21 +58,21 @@ export component Sidebar inherits Rectangle {
 
         // Filter chips: Все, Плейлисты, Подкасты, Альбомы, Исполнители
         HorizontalLayout {
-            spacing: 8px;
+            spacing: 6px;
             
-            for filter_name[idx] in ["Все", "Плейлисты", "Альбомы", "Исполнители"] : Rectangle {
+            for filter_name[idx] in ["Все", "Плейлисты", "Альбомы", "Артисты"] : Rectangle {
                 height: 28px;
                 border-radius: 14px;
                 background: root.selected_filter == idx ? Theme.text-primary : (chip_touch.has-hover ? Theme.background-hover : Theme.background-elevated);
                 
                 HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
+                    padding-left: 10px;
+                    padding-right: 10px;
                     
                     Text {
                         text: filter_name;
                         color: root.selected_filter == idx ? Theme.background : Theme.text-primary;
-                        font-size: 12px;
+                        font-size: 11px;
                         font-weight: 600;
                         vertical-alignment: center;
                     }
@@ -122,7 +112,7 @@ export component Sidebar inherits Rectangle {
         }
 
         // Playlists list inside Flickable
-        Flickable {
+        if root.playlists.length > 0 : Flickable {
             vertical-stretch: 1;
             
             VerticalLayout {
@@ -139,7 +129,6 @@ export component Sidebar inherits Rectangle {
                         spacing: 12px;
                         alignment: center;
 
-                        // Cover thumbnail
                         Rectangle {
                             width: 44px;
                             height: 44px;
@@ -155,7 +144,6 @@ export component Sidebar inherits Rectangle {
                             }
                         }
 
-                        // Title & Subtitle
                         VerticalLayout {
                             horizontal-stretch: 1;
                             alignment: center;
@@ -189,6 +177,64 @@ export component Sidebar inherits Rectangle {
                         clicked => { root.playlist_selected(item.id); }
                     }
                 }
+            }
+        }
+
+        // Empty state when unauthenticated or empty library
+        if root.playlists.length == 0 : VerticalLayout {
+            vertical-stretch: 1;
+            alignment: center;
+            spacing: 12px;
+
+            Rectangle {
+                width: 64px;
+                height: 64px;
+                border-radius: 32px;
+                background: Theme.background-elevated;
+                horizontal-alignment: center;
+
+                Text {
+                    text: "♪";
+                    font-size: 28px;
+                    color: Theme.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            Text {
+                text: root.is_authenticated ? "В медиатеке пока пусто" : "Войдите в аккаунт";
+                color: Theme.text-primary;
+                font-size: 14px;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: root.is_authenticated ? "Создайте плейлист или сохраните треки" : "чтобы увидеть плейлисты и треки";
+                color: Theme.text-secondary;
+                font-size: 12px;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            if !root.is_authenticated : Rectangle {
+                width: 140px;
+                height: 36px;
+                border-radius: 18px;
+                background: Theme.accent;
+                horizontal-alignment: center;
+
+                Text {
+                    text: "Войти";
+                    color: #000000;
+                    font-size: 13px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea { clicked => { root.login_clicked(); } }
             }
         }
     }

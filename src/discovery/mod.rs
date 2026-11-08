@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing::info;
+use mdns_sd::{ServiceDaemon, ServiceEvent};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
 pub struct DiscoveredSpeaker {
@@ -23,22 +24,56 @@ impl SpeakerDiscovery {
     }
 
     pub fn start(&self) {
-        info!("Starting mDNS speaker discovery for Spotify Connect and Google Cast...");
+        info!("Starting genuine mDNS speaker discovery for Spotify Connect and Google Cast...");
         let speakers = Arc::clone(&self.speakers);
-        tokio::spawn(async move {
-            // Background mDNS scanner for "_spotify-connect._tcp.local." & "_googlecast._tcp.local."
-            // Use safe lock acquisition to avoid panics on poisoned mutexes
-            if let Ok(mut list) = speakers.lock() {
-                list.insert(
-                    "google-home-1".to_string(),
-                    DiscoveredSpeaker {
-                        id: "google-home-1".to_string(),
-                        name: "Google Home (Кухня)".to_string(),
-                        service_type: "_googlecast._tcp".to_string(),
-                        host: "192.168.1.105".to_string(),
-                        port: 8009,
-                    },
-                );
+
+        tokio::task::spawn_blocking(move || {
+            let mdns = match ServiceDaemon::new() {
+                Ok(daemon) => daemon,
+                Err(e) => {
+                    warn!("Failed to initialize mDNS daemon: {}", e);
+                    return;
+                }
+            };
+
+            let services = ["_googlecast._tcp.local.", "_spotify-connect._tcp.local."];
+            for service in services {
+                match mdns.browse(service) {
+                    Ok(receiver) => {
+                        let speakers_inner = Arc::clone(&speakers);
+                        std::thread::spawn(move || {
+                            while let Ok(event) = receiver.recv() {
+                                if let ServiceEvent::ServiceResolved(info) = event {
+                                    let id = info.get_fullname().to_string();
+                                    let name = info.get_property_val_str("fn")
+                                        .map(|s| s.to_string())
+                                        .unwrap_or_else(|| info.get_fullname().trim_end_matches(".local.").to_string());
+                                    let host = info.get_hostname().to_string();
+                                    let port = info.get_port();
+                                    let s_type = info.get_type().to_string();
+
+                                    info!("Discovered network speaker: {} ({}:{})", name, host, port);
+
+                                    if let Ok(mut map) = speakers_inner.lock() {
+                                        map.insert(
+                                            id.clone(),
+                                            DiscoveredSpeaker {
+                                                id,
+                                                name,
+                                                service_type: s_type,
+                                                host,
+                                                port,
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        warn!("Failed to browse service {}: {}", service, e);
+                    }
+                }
             }
         });
     }

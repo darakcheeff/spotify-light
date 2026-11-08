@@ -120,7 +120,13 @@ export component Sidebar inherits Rectangle {
                 spacing: 4px;
 
                 for item in root.playlists : Rectangle {
-                    height: 56px;
+                    property <bool> matches_filter: root.selected_filter == 0 
+                        || (root.selected_filter == 1 && !item.subtitle.contains("Исполнитель") && !item.subtitle.contains("Альбом"))
+                        || (root.selected_filter == 2 && item.subtitle.contains("Альбом"))
+                        || (root.selected_filter == 3 && item.subtitle.contains("Исполнитель"));
+
+                    height: matches_filter ? 56px : 0px;
+                    visible: matches_filter;
                     border-radius: Theme.radius-small;
                     background: item.is_active ? Theme.background-elevated : (item_touch.has-hover ? Theme.background-hover : transparent);
 

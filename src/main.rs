@@ -293,30 +293,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Auth Callback: Browser Login (OAuth / PKCE Loopback)
     app.on_browser_login_requested({
         let app_weak = app_weak.clone();
+        let api_client_lock = Arc::clone(&active_api_client);
         move || {
             let app_weak = app_weak.clone();
+            let api_client_lock = Arc::clone(&api_client_lock);
             tokio::spawn(async move {
-                info!("[AUTH] Launching browser OAuth authentication...");
-                let client_id = "27929427018d4157a41285e656d0d218";
-                let redirect_uri = "http://127.0.0.1:8888/callback";
-                let auth_url = format!(
-                    "https://accounts.spotify.com/authorize?client_id={}&response_type=token&redirect_uri={}&scope=user-read-private%20playlist-read-private%20user-read-playback-state%20user-modify-playback-state",
-                    client_id, redirect_uri
-                );
+                info!("[AUTH] Browser OAuth flow initiated by user");
 
-                match std::process::Command::new("xdg-open").arg(&auth_url).spawn() {
-                    Ok(_) => {
-                        info!("[AUTH] Successfully opened default browser with Spotify OAuth URL");
+                match api::login_with_oauth().await {
+                    Ok((session, access_token)) => {
+                        info!("[AUTH SUCCESS] Browser OAuth succeeded!");
+
+                        let client = SpotifyApiClient::new(access_token);
+                        let mut display_name = session.username().to_string();
+
+                        if let Ok(name) = client.get_current_user().await {
+                            display_name = name;
+                        }
+
+                        if let Ok(playlists) = client.get_playlists().await {
+                            let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                PlaylistItem {
+                                    id: p.id.into(),
+                                    title: p.title.into(),
+                                    subtitle: format!("Плейлист • {} треков", p.track_count).into(),
+                                    is_pinned: false,
+                                    is_active: false,
+                                }
+                            }).collect();
+
+                            let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_user_playlists(ModelRc::new(VecModel::from(slint_playlists)));
+                            });
+                        }
+
+                        let mut guard = api_client_lock.lock().await;
+                        *guard = Some(client);
+
+                        let disp = display_name;
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_auth_loading(false);
+                            ui.set_auth_error("".into());
+                            ui.set_is_authenticated(true);
+                            ui.set_is_login_open(false);
+                            ui.set_user_display_name(disp.into());
+                        });
                     }
-                    Err(e) => {
-                        error!("[SYSTEM ERROR] Failed to run xdg-open: {}. Please open manually: {}", e, auth_url);
+                    Err(err) => {
+                        error!("[AUTH ERROR] Browser OAuth failed: {}", err);
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_auth_loading(false);
+                            ui.set_auth_error(err.into());
+                        });
                     }
                 }
-
-                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_auth_loading(false);
-                    ui.set_auth_error("Браузер открыт. Если не открылся, введите логин и пароль напрямую.".into());
-                });
             });
         }
     });

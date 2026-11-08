@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use librespot::core::authentication::Credentials;
 use librespot::core::config::SessionConfig;
 use librespot::core::session::Session;
+use librespot::oauth::OAuthClientBuilder;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
@@ -125,9 +126,9 @@ pub async fn connect_with_password(username: &str, password: &str) -> Result<Ses
             let err_str = e.to_string();
             error!("[AUTH FAILURE] Authentication failed for '{}': {}", username, err_str);
             if err_str.to_lowercase().contains("bad credentials") || err_str.to_lowercase().contains("invalid") {
-                Err("Неверный логин или пароль".to_string())
+                Err("Spotify отклонил прямой пароль (аккаунт привязан к Google/Apple или требует подтверждения). Используйте зеленую кнопку 'Войти через браузер'".to_string())
             } else if err_str.to_lowercase().contains("challenge") || err_str.to_lowercase().contains("needs approval") {
-                Err("Spotify требует подтверждение через почту или браузер".to_string())
+                Err("Spotify требует подтверждение через браузер. Нажмите 'Войти через браузер'".to_string())
             } else {
                 Err(format!("Ошибка входа: {}", err_str))
             }
@@ -151,6 +152,82 @@ pub async fn connect_with_token(token: &str) -> Result<Session, String> {
             Err(format!("Ошибка авторизации по токену: {}", e))
         }
     }
+}
+
+pub async fn login_with_oauth() -> Result<(Session, String), String> {
+    info!("[OAUTH] Starting interactive Spotify OAuth PKCE flow...");
+    let client_id = "65b708073fc0480ea92a077233ca87bd";
+    let redirect_uri = "http://127.0.0.1:8898/login";
+    let scopes = vec![
+        "streaming",
+        "user-read-playback-state",
+        "user-modify-playback-state",
+        "playlist-read-private",
+        "playlist-read-collaborative",
+        "user-library-read",
+        "user-read-email",
+        "user-read-private",
+    ];
+
+    let custom_html = r#"<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SpotifyLight - Вход выполнен</title>
+<style>
+body { background: #121212; color: #1db954; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; }
+h1 { font-size: 28px; margin-bottom: 8px; }
+p { color: #b3b3b3; font-size: 15px; }
+</style>
+<script>setTimeout(function(){ window.close(); }, 2000);</script>
+</head>
+<body>
+    <h1>✔ Вход успешно выполнен!</h1>
+    <p>SpotifyLight подключен к вашему аккаунту. Вы можете закрыть эту вкладку.</p>
+</body>
+</html>"#;
+
+    let oauth_client = OAuthClientBuilder::new(client_id, redirect_uri, scopes)
+        .open_in_browser()
+        .with_custom_message(custom_html)
+        .build()
+        .map_err(|e| {
+            error!("[OAUTH ERROR] Failed to construct OAuthClient: {}", e);
+            format!("Ошибка инициализации OAuth: {}", e)
+        })?;
+
+    info!("[OAUTH] Waiting for authorization in browser at http://127.0.0.1:8898/login...");
+    let token = oauth_client
+        .get_access_token_async()
+        .await
+        .map_err(|e| {
+            error!("[OAUTH ERROR] Failed to obtain token from browser: {}", e);
+            format!("Ошибка авторизации в браузере: {}", e)
+        })?;
+
+    info!("[OAUTH] Received access token! Connecting session to Spotify...");
+    let credentials = Credentials::with_access_token(&token.access_token);
+    let session_config = SessionConfig::default();
+    let session = Session::new(session_config, None);
+
+    session
+        .connect(credentials, false)
+        .await
+        .map_err(|e| {
+            error!("[OAUTH ERROR] Failed to connect session with access token: {}", e);
+            format!("Ошибка подключения к Spotify по токену: {}", e)
+        })?;
+
+    let username = session.username().to_string();
+    info!("[OAUTH SUCCESS] Authenticated as user '{}' via OAuth PKCE", username);
+
+    let _ = save_credentials(&SavedCredentials {
+        username: username.clone(),
+        password: None,
+        token: Some(token.access_token.clone()),
+    });
+
+    Ok((session, token.access_token))
 }
 
 #[derive(Clone)]

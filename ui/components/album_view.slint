@@ -1,0 +1,237 @@
+import { Theme, TrackItem } from "../theme.slint";
+
+export component AlbumView inherits Rectangle {
+    background: transparent;
+    
+    in property <string> album_title: "89.7 Growl FM";
+    in property <string> album_type: "Сборник";
+    in property <string> album_desc: "Разные исполнители • 2023 • 13 треков, 34 мин. 45 сек.";
+    
+    in property <[TrackItem]> tracks: [
+        { id: "t1", index: 1, title: "Let The Stars Die", artist: "Coeur Noir", album: "89.7 Growl FM", duration_str: "2:27", play_count_str: "528 565", is_liked: false, is_playing: false },
+        { id: "t2", index: 2, title: "Flatline", artist: "Red Dead Roadkill", album: "89.7 Growl FM", duration_str: "2:39", play_count_str: "1 343 685", is_liked: false, is_playing: false },
+        { id: "t3", index: 3, title: "Candy Shell", artist: "Spirit Machines", album: "89.7 Growl FM", duration_str: "2:59", play_count_str: "2 502 621", is_liked: false, is_playing: false },
+        { id: "t4", index: 4, title: "Do or Die", artist: "NoWorld", album: "89.7 Growl FM", duration_str: "2:30", play_count_str: "842 954", is_liked: false, is_playing: false },
+        { id: "t5", index: 5, title: "LIT", artist: "Entolim", album: "89.7 Growl FM", duration_str: "2:59", play_count_str: "1 070 951", is_liked: false, is_playing: false },
+        { id: "t6", index: 6, title: "El Tiempo", artist: "Skin On Flesh", album: "89.7 Growl FM", duration_str: "2:07", play_count_str: "2 835 560", is_liked: false, is_playing: false },
+        { id: "t7", index: 7, title: "Killshot", artist: "Frost, Justtjokay, Dubbygotbars", album: "89.7 Growl FM", duration_str: "2:18", play_count_str: "1 430 720", is_liked: true, is_playing: true },
+        { id: "t8", index: 8, title: "Let It Go As If You Wander", artist: "Various Artists", album: "89.7 Growl FM", duration_str: "2:42", play_count_str: "2 400 713", is_liked: false, is_playing: false },
+    ];
+
+    callback play_all();
+    callback track_clicked(string);
+    callback track_context_menu(string, length, length);
+    callback like_track(string);
+
+    Flickable {
+        viewport-height: 850px;
+
+        VerticalLayout {
+            // 1. Hero Header with Gradient
+            Rectangle {
+                height: 280px;
+                background: @linear-gradient(180deg, #831843 0%, #1e1e1e 100%);
+
+                HorizontalLayout {
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    padding-bottom: 24px;
+                    spacing: 28px;
+                    alignment: end;
+
+                    // Cover Art
+                    Rectangle {
+                        width: 192px;
+                        height: 192px;
+                        border-radius: 6px;
+                        background: #0f172a;
+                        drop-shadow-blur: 32px;
+                        drop-shadow-color: #000000;
+
+                        Text {
+                            text: "Cyberpunk\nGrowl FM";
+                            color: #f43f5e;
+                            font-size: 22px;
+                            font-weight: 900;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    // Metadata
+                    VerticalLayout {
+                        alignment: end;
+                        spacing: 8px;
+
+                        Text {
+                            text: root.album_type;
+                            color: Theme.text-primary;
+                            font-size: 13px;
+                            font-weight: 700;
+                        }
+
+                        Text {
+                            text: root.album_title;
+                            color: Theme.text-primary;
+                            font-size: 56px;
+                            font-weight: 900;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            text: root.album_desc;
+                            color: Theme.text-secondary;
+                            font-size: 13px;
+                            font-weight: 500;
+                        }
+                    }
+                }
+            }
+
+            // 2. Actions Bar (Play, Shuffle, Like, More)
+            Rectangle {
+                height: 84px;
+                background: Theme.background;
+
+                HorizontalLayout {
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    spacing: 24px;
+                    alignment: center;
+
+                    // Big Green Play Button
+                    Rectangle {
+                        width: 56px;
+                        height: 56px;
+                        border-radius: 28px;
+                        background: big_play.has-hover ? Theme.accent-hover : Theme.accent;
+
+                        Text {
+                            text: "▶";
+                            color: #000000;
+                            font-size: 24px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        big_play := TouchArea { clicked => { root.play_all(); } }
+                    }
+
+                    Text { text: "🔀"; font-size: 24px; color: Theme.text-secondary; }
+                    Text { text: "⊕"; font-size: 28px; color: Theme.text-secondary; }
+                    Text { text: "↓"; font-size: 24px; color: Theme.text-secondary; }
+                    Text { text: "•••"; font-size: 24px; color: Theme.text-secondary; }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    Text {
+                        text: "Список :≡";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // 3. Track List Table
+            VerticalLayout {
+                padding-left: 32px;
+                padding-right: 32px;
+                padding-bottom: 32px;
+                spacing: 8px;
+
+                // Table Header
+                Rectangle {
+                    height: 36px;
+                    border-bottom-width: 1px;
+                    border-color: Theme.border-color;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 16px;
+                        alignment: center;
+
+                        Text { width: 30px; text: "#"; color: Theme.text-secondary; font-size: 12px; }
+                        Text { horizontal-stretch: 1; text: "Название"; color: Theme.text-secondary; font-size: 12px; }
+                        Text { width: 140px; text: "Прослушивания"; color: Theme.text-secondary; font-size: 12px; }
+                        Text { width: 60px; text: "🕒"; color: Theme.text-secondary; font-size: 12px; horizontal-alignment: right; }
+                    }
+                }
+
+                // Table Rows
+                for trk in root.tracks : Rectangle {
+                    height: 54px;
+                    border-radius: 4px;
+                    background: trk.is_playing ? Theme.background-elevated : (row_touch.has-hover ? Theme.background-hover : transparent);
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 16px;
+                        alignment: center;
+
+                        // Index or Play Icon
+                        Text {
+                            width: 30px;
+                            text: trk.is_playing ? "▶" : trk.index;
+                            color: trk.is_playing ? Theme.accent : Theme.text-secondary;
+                            font-size: 13px;
+                            font-weight: trk.is_playing ? 700 : 500;
+                        }
+
+                        // Title + Artist
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            spacing: 2px;
+
+                            Text {
+                                text: trk.title;
+                                color: trk.is_playing ? Theme.accent : Theme.text-primary;
+                                font-size: 14px;
+                                font-weight: 600;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: trk.artist;
+                                color: Theme.text-secondary;
+                                font-size: 12px;
+                                overflow: elide;
+                            }
+                        }
+
+                        // Play count
+                        Text {
+                            width: 140px;
+                            text: trk.play_count_str;
+                            color: Theme.text-secondary;
+                            font-size: 13px;
+                        }
+
+                        // Like mark
+                        Text {
+                            text: trk.is_liked ? "✔" : "";
+                            color: Theme.accent;
+                            font-size: 14px;
+                        }
+
+                        // Duration
+                        Text {
+                            width: 50px;
+                            text: trk.duration_str;
+                            color: Theme.text-secondary;
+                            font-size: 13px;
+                            horizontal-alignment: right;
+                        }
+                    }
+
+                    row_touch := TouchArea {
+                        clicked => { root.track_clicked(trk.id); }
+                    }
+                }
+            }
+        }
+    }
+}

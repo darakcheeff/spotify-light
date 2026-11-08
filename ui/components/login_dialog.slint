@@ -1,0 +1,200 @@
+import { Theme } from "../theme.slint";
+
+export component LoginDialog inherits Rectangle {
+    background: #000000d0;
+    
+    in-out property <int> auth_step: 0; // 0: Email, 1: Password or OTP Code
+    in-out property <string> email: "";
+    in-out property <string> password: "";
+    in-out property <string> otp_code: "";
+    in-out property <bool> is_otp_mode: false;
+    in-out property <string> error_message: "";
+    in-out property <bool> is_loading: false;
+
+    callback submit_email(string);
+    callback submit_password(string, string);
+    callback submit_otp(string, string);
+    callback cancel();
+
+    // Dialog Card
+    Rectangle {
+        width: 440px;
+        height: 480px;
+        background: Theme.background-secondary;
+        border-radius: Theme.radius-large;
+        border-width: 1px;
+        border-color: Theme.border-color;
+
+        VerticalLayout {
+            padding: 36px;
+            spacing: 20px;
+            alignment: center;
+
+            // Spotify Icon
+            Text {
+                text: "🎧 SpotifyLight";
+                color: Theme.accent;
+                font-size: 24px;
+                font-weight: 800;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: root.auth_step == 0 ? "Вход в аккаунт" : (root.is_otp_mode ? "Введите код из письма" : "Введите пароль");
+                color: Theme.text-primary;
+                font-size: 18px;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+
+            if root.error_message != "" : Rectangle {
+                height: 36px;
+                border-radius: 4px;
+                background: #e11d4833;
+                border-width: 1px;
+                border-color: #e11d48;
+                Text {
+                    text: root.error_message;
+                    color: #fda4af;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            // Step 0: Email
+            if root.auth_step == 0 : VerticalLayout {
+                spacing: 16px;
+
+                Text { text: "Электронная почта или имя пользователя"; color: Theme.text-secondary; font-size: 12px; }
+
+                Rectangle {
+                    height: 44px;
+                    border-radius: 4px;
+                    background: Theme.background-elevated;
+                    border-width: 1px;
+                    border-color: email_inp.has-focus ? Theme.text-primary : Theme.border-color;
+
+                    HorizontalLayout {
+                        padding-left: 12px; padding-right: 12px;
+                        email_inp := TextInput {
+                            text <=> root.email;
+                            color: Theme.text-primary;
+                            font-size: 14px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 44px;
+                    border-radius: 22px;
+                    background: Theme.accent;
+
+                    Text {
+                        text: "Продолжить";
+                        color: #000000;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        clicked => { root.submit_email(root.email); }
+                    }
+                }
+            }
+
+            // Step 1: Password or OTP Code
+            if root.auth_step == 1 : VerticalLayout {
+                spacing: 16px;
+
+                if root.is_otp_mode : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Мы отправили 6-значный код на почту:"; color: Theme.text-secondary; font-size: 12px; }
+                    Text { text: root.email; color: Theme.text-primary; font-size: 13px; font-weight: 700; }
+
+                    Rectangle {
+                        height: 44px;
+                        border-radius: 4px;
+                        background: Theme.background-elevated;
+                        border-width: 1px;
+                        border-color: otp_inp.has-focus ? Theme.text-primary : Theme.border-color;
+
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px;
+                            otp_inp := TextInput {
+                                text <=> root.otp_code;
+                                color: Theme.text-primary;
+                                font-size: 16px;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                if !root.is_otp_mode : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Пароль"; color: Theme.text-secondary; font-size: 12px; }
+
+                    Rectangle {
+                        height: 44px;
+                        border-radius: 4px;
+                        background: Theme.background-elevated;
+                        border-width: 1px;
+                        border-color: pwd_inp.has-focus ? Theme.text-primary : Theme.border-color;
+
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px;
+                            pwd_inp := TextInput {
+                                text <=> root.password;
+                                color: Theme.text-primary;
+                                font-size: 14px;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 44px;
+                    border-radius: 22px;
+                    background: Theme.accent;
+
+                    Text {
+                        text: "Войти";
+                        color: #000000;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        clicked => {
+                            if root.is_otp_mode {
+                                root.submit_otp(root.email, root.otp_code);
+                            } else {
+                                root.submit_password(root.email, root.password);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Close
+            Rectangle {
+                height: 32px;
+                Text {
+                    text: "Отмена";
+                    color: Theme.text-secondary;
+                    font-size: 13px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.cancel(); } }
+            }
+        }
+    }
+}

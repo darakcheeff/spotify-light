@@ -1,0 +1,48 @@
+[package]
+name = "spotify-light"
+version = "0.1.0"
+edition = "2021"
+authors = ["darakcheeff"]
+description = "Lightweight, native Spotify client for Linux built with Rust and Slint (No Electron, No WebView)"
+license = "GPL-3.0-only"
+repository = "https://github.com/darakcheeff/spotify-light"
+
+[dependencies]
+# UI Framework
+slint = { version = "1.9", default-features = false, features = ["compat-1-2", "backend-winit", "renderer-femtovg"] }
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+
+# Audio & Spotify Core
+librespot = { version = "0.6", default-features = false, features = ["alsa-backend", "pulseaudio-backend"] }
+
+# HTTP & Spotify Web API
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Local cache (mmap SQLite like in Kinrox)
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Linux Desktop Integration (MPRIS2 over D-Bus)
+zbus = { version = "4.4", default-features = false, features = ["tokio"] }
+
+# Local Network Discovery (mDNS for Google Home / Connect speakers)
+mdns-sd = "0.11"
+
+# Utility & Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5.0"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
+[build-dependencies]
+slint-build = "1.9"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

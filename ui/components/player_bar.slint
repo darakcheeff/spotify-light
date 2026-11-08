@@ -1,0 +1,342 @@
+import { Theme } from "../theme.slint";
+
+export component PlayerBar inherits Rectangle {
+    height: 80px;
+    background: Theme.background;
+    
+    in property <string> track_title: "JOHN CENA";
+    in property <string> track_artist: "Joey Valence & Brae";
+    in property <string> current_time_str: "1:25";
+    in property <string> total_time_str: "2:43";
+    in property <float> progress: 0.52; // 0.0 .. 1.0
+    in property <bool> is_playing: true;
+    in property <bool> is_liked: true;
+    in property <bool> is_shuffle: false;
+    in property <bool> is_repeat: false;
+    in property <float> volume: 0.8; // 0.0 .. 1.0
+    
+    in property <bool> lyrics_open: false;
+    in property <bool> queue_open: false;
+    in property <bool> devices_open: false;
+
+    callback play_pause_clicked();
+    callback next_clicked();
+    callback prev_clicked();
+    callback shuffle_clicked();
+    callback repeat_clicked();
+    callback like_clicked();
+    callback seek(float);
+    callback volume_changed(float);
+    
+    callback toggle_lyrics();
+    callback toggle_queue();
+    callback toggle_devices();
+    callback toggle_mini_player();
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 16px;
+        alignment: center;
+
+        // Left Section: Track Info & Like
+        HorizontalLayout {
+            width: 280px;
+            spacing: 14px;
+            alignment: center;
+
+            // Thumbnail
+            Rectangle {
+                width: 56px;
+                height: 56px;
+                border-radius: 4px;
+                background: #282828;
+
+                Text {
+                    text: "♪";
+                    font-size: 24px;
+                    color: Theme.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            // Title & Artist
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 4px;
+
+                Text {
+                    text: root.track_title;
+                    color: Theme.text-primary;
+                    font-size: 14px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: root.track_artist;
+                    color: Theme.text-secondary;
+                    font-size: 12px;
+                    overflow: elide;
+                }
+            }
+
+            // Like Button (Heart / Checkmark)
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+
+                Text {
+                    text: root.is_liked ? "✔" : "♡";
+                    color: root.is_liked ? Theme.accent : Theme.text-secondary;
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => { root.like_clicked(); }
+                }
+            }
+        }
+
+        // Center Section: Controls & Progress Bar
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 8px;
+
+            // Buttons: Shuffle, Prev, Play/Pause, Next, Repeat
+            HorizontalLayout {
+                spacing: 20px;
+                alignment: center;
+
+                // Shuffle
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    Text {
+                        text: "🔀";
+                        font-size: 14px;
+                        color: root.is_shuffle ? Theme.accent : Theme.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.shuffle_clicked(); } }
+                }
+
+                // Prev
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    Text {
+                        text: "⏮";
+                        font-size: 16px;
+                        color: Theme.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.prev_clicked(); } }
+                }
+
+                // Play / Pause Circle
+                Rectangle {
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 18px;
+                    background: pp_touch.has-hover ? #f0f0f0 : #ffffff;
+
+                    Text {
+                        text: root.is_playing ? "⏸" : "▶";
+                        color: #000000;
+                        font-size: 15px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    pp_touch := TouchArea {
+                        clicked => { root.play_pause_clicked(); }
+                    }
+                }
+
+                // Next
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    Text {
+                        text: "⏭";
+                        font-size: 16px;
+                        color: Theme.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.next_clicked(); } }
+                }
+
+                // Repeat
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    Text {
+                        text: "🔁";
+                        font-size: 14px;
+                        color: root.is_repeat ? Theme.accent : Theme.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.repeat_clicked(); } }
+                }
+            }
+
+            // Scrubber Bar
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: center;
+
+                Text {
+                    text: root.current_time_str;
+                    color: Theme.text-secondary;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+
+                // Slider track
+                scrubber_track := Rectangle {
+                    horizontal-stretch: 1;
+                    height: 4px;
+                    border-radius: 2px;
+                    background: Theme.scrubber-bg;
+
+                    // Progress fill
+                    Rectangle {
+                        x: 0px;
+                        y: 0px;
+                        width: scrubber_track.width * root.progress;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: scrubber_touch.has-hover ? Theme.accent : Theme.text-primary;
+                    }
+
+                    // Scrubber thumb
+                    if scrubber_touch.has-hover : Rectangle {
+                        x: (scrubber_track.width * root.progress) - 6px;
+                        y: -4px;
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 6px;
+                        background: #ffffff;
+                    }
+
+                    scrubber_touch := TouchArea {
+                        clicked => {
+                            root.seek(self.mouse-x / scrubber_track.width);
+                        }
+                    }
+                }
+
+                Text {
+                    text: root.total_time_str;
+                    color: Theme.text-secondary;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // Right Section: Lyrics, Queue, Devices, Volume, MiniPlayer
+        HorizontalLayout {
+            width: 280px;
+            spacing: 12px;
+            alignment: center;
+
+            // Lyrics (Microphone)
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                Text {
+                    text: "🎤";
+                    font-size: 15px;
+                    color: root.lyrics_open ? Theme.accent : Theme.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.toggle_lyrics(); } }
+            }
+
+            // Queue
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                Text {
+                    text: "≡";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: root.queue_open ? Theme.accent : Theme.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.toggle_queue(); } }
+            }
+
+            // Devices (Connect)
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                Text {
+                    text: "📺";
+                    font-size: 15px;
+                    color: root.devices_open ? Theme.accent : Theme.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.toggle_devices(); } }
+            }
+
+            // Volume Icon + Slider
+            Text {
+                text: "🔊";
+                font-size: 14px;
+                color: Theme.text-secondary;
+                vertical-alignment: center;
+            }
+
+            vol_track := Rectangle {
+                width: 80px;
+                height: 4px;
+                border-radius: 2px;
+                background: Theme.scrubber-bg;
+
+                Rectangle {
+                    x: 0px;
+                    width: vol_track.width * root.volume;
+                    height: 4px;
+                    border-radius: 2px;
+                    background: vol_touch.has-hover ? Theme.accent : Theme.text-primary;
+                }
+
+                vol_touch := TouchArea {
+                    clicked => {
+                        root.volume_changed(self.mouse-x / vol_track.width);
+                    }
+                }
+            }
+
+            // MiniPlayer
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                Text {
+                    text: "⤢";
+                    font-size: 16px;
+                    color: Theme.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.toggle_mini_player(); } }
+            }
+        }
+    }
+}

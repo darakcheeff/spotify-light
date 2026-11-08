@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=SpotifyLight
+GenericName=Music Player
+Comment=Lightweight, native Spotify client for Linux
+Exec=spotify-light %U
+Icon=spotify-light
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;
+MimeType=x-scheme-handler/spotify;
+Keywords=spotify;music;player;lightweight;slint;

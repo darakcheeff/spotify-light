@@ -1,0 +1,182 @@
+import { Theme } from "../theme.slint";
+
+export component TopBar inherits Rectangle {
+    height: 64px;
+    background: Theme.background;
+    
+    in-out property <string> search_text: "";
+    in-out property <string> user_name: "L";
+    
+    callback nav_back();
+    callback nav_forward();
+    callback nav_home();
+    callback search_changed(string);
+    callback profile_clicked();
+    callback notifications_clicked();
+
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: 24px;
+        spacing: 16px;
+        alignment: center;
+
+        // Navigation History (Back / Forward)
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: center;
+            
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+                background: nav_back_touch.has-hover ? Theme.background-hover : Theme.background-secondary;
+                
+                Text {
+                    text: "‹";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                
+                nav_back_touch := TouchArea {
+                    clicked => { root.nav_back(); }
+                }
+            }
+
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+                background: nav_fwd_touch.has-hover ? Theme.background-hover : Theme.background-secondary;
+                
+                Text {
+                    text: "›";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                
+                nav_fwd_touch := TouchArea {
+                    clicked => { root.nav_forward(); }
+                }
+            }
+        }
+
+        // Home button
+        Rectangle {
+            width: 48px;
+            height: 48px;
+            border-radius: 24px;
+            background: home_touch.has-hover ? Theme.background-hover : Theme.background-secondary;
+            
+            Text {
+                text: "⌂";
+                color: Theme.text-primary;
+                font-size: 20px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            
+            home_touch := TouchArea {
+                clicked => { root.nav_home(); }
+            }
+        }
+
+        // Search bar
+        Rectangle {
+            horizontal-stretch: 1;
+            max-width: 480px;
+            height: 48px;
+            border-radius: 24px;
+            background: search_touch.has-hover ? Theme.background-elevated : Theme.background-secondary;
+            border-width: 1px;
+            border-color: search_input.has-focus ? Theme.text-primary : transparent;
+
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {
+                    text: "🔍";
+                    font-size: 16px;
+                    color: Theme.text-secondary;
+                    vertical-alignment: center;
+                }
+
+                search_input := TextInput {
+                    horizontal-stretch: 1;
+                    text <=> root.search_text;
+                    color: Theme.text-primary;
+                    font-size: 14px;
+                    vertical-alignment: center;
+                    edited => { root.search_changed(self.text); }
+                }
+
+                if root.search_text == "" : Text {
+                    text: "Что хочешь включить?";
+                    color: Theme.text-muted;
+                    font-size: 14px;
+                    vertical-alignment: center;
+                }
+            }
+
+            search_touch := TouchArea {}
+        }
+
+        // Spacer
+        Rectangle { horizontal-stretch: 1; }
+
+        // Right side: Notifications, Profile
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: center;
+
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: 18px;
+                background: bell_touch.has-hover ? Theme.background-hover : transparent;
+                
+                Text {
+                    text: "🔔";
+                    font-size: 15px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                
+                bell_touch := TouchArea {
+                    clicked => { root.notifications_clicked(); }
+                }
+            }
+
+            // User Avatar
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: 18px;
+                background: #535353;
+                border-width: 2px;
+                border-color: avatar_touch.has-hover ? Theme.text-primary : transparent;
+
+                Text {
+                    text: root.user_name;
+                    color: Theme.text-primary;
+                    font-size: 14px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                avatar_touch := TouchArea {
+                    clicked => { root.profile_clicked(); }
+                }
+            }
+        }
+    }
+}

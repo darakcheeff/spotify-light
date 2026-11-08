@@ -1,0 +1,191 @@
+import { Theme, PlaylistItem } from "../theme.slint";
+
+export component Sidebar inherits Rectangle {
+    width: 280px;
+    background: Theme.background-secondary;
+    border-radius: Theme.radius-medium;
+    
+    in property <[PlaylistItem]> playlists: [
+        { id: "1", title: "Любимые треки", subtitle: "Плейлист • Закреплено", is_pinned: true, is_active: false },
+        { id: "2", title: "Coffee Table Jazz", subtitle: "Плейлист • Spotify", is_pinned: true, is_active: false },
+        { id: "3", title: "Жадан і Собаки", subtitle: "Исполнитель", is_pinned: false, is_active: false },
+        { id: "4", title: "Опп", subtitle: "Плейлист", is_pinned: false, is_active: false },
+        { id: "5", title: "Chris Benstead", subtitle: "Исполнитель", is_pinned: false, is_active: false },
+        { id: "6", title: "Гребенщиков", subtitle: "Плейлист", is_pinned: false, is_active: false },
+        { id: "7", title: "Оффлайн", subtitle: "Плейлист", is_pinned: false, is_active: false },
+        { id: "8", title: "Die Antwoord", subtitle: "Плейлист", is_pinned: false, is_active: false },
+        { id: "9", title: "Neverlove", subtitle: "Плейлист", is_pinned: false, is_active: false },
+    ];
+    
+    in-out property <int> selected_filter: 0; // 0: Все, 1: Плейлисты, 2: Подкасты, 3: Альбомы, 4: Исполнители
+    
+    callback create_clicked();
+    callback filter_selected(int);
+    callback playlist_selected(string);
+    callback playlist_context_menu(string, length, length);
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+
+        // Header: "Моя медиатека" + "+ Создать"
+        HorizontalLayout {
+            alignment: center;
+            
+            Text {
+                text: "Моя медиатека";
+                color: Theme.text-primary;
+                font-size: 16px;
+                font-weight: 700;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+
+            Rectangle {
+                width: 90px;
+                height: 32px;
+                border-radius: 16px;
+                background: create_touch.has-hover ? Theme.background-hover : Theme.background-elevated;
+
+                HorizontalLayout {
+                    alignment: center;
+                    spacing: 4px;
+                    
+                    Text {
+                        text: "+ Создать";
+                        color: Theme.text-primary;
+                        font-size: 13px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+
+                create_touch := TouchArea {
+                    clicked => { root.create_clicked(); }
+                }
+            }
+        }
+
+        // Filter chips: Все, Плейлисты, Подкасты, Альбомы, Исполнители
+        HorizontalLayout {
+            spacing: 8px;
+            
+            for filter_name[idx] in ["Все", "Плейлисты", "Альбомы", "Исполнители"] : Rectangle {
+                height: 28px;
+                border-radius: 14px;
+                background: root.selected_filter == idx ? Theme.text-primary : (chip_touch.has-hover ? Theme.background-hover : Theme.background-elevated);
+                
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    
+                    Text {
+                        text: filter_name;
+                        color: root.selected_filter == idx ? Theme.background : Theme.text-primary;
+                        font-size: 12px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+
+                chip_touch := TouchArea {
+                    clicked => {
+                        root.selected_filter = idx;
+                        root.filter_selected(idx);
+                    }
+                }
+            }
+        }
+
+        // Search & Sort bar
+        HorizontalLayout {
+            padding-left: 4px;
+            padding-right: 4px;
+            alignment: center;
+
+            Text {
+                text: "🔍";
+                font-size: 14px;
+                color: Theme.text-secondary;
+                vertical-alignment: center;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            Text {
+                text: "Недавние ☰";
+                font-size: 12px;
+                color: Theme.text-secondary;
+                font-weight: 500;
+                vertical-alignment: center;
+            }
+        }
+
+        // Playlists list
+        ListView {
+            vertical-stretch: 1;
+            
+            for item in root.playlists : Rectangle {
+                height: 56px;
+                border-radius: Theme.radius-small;
+                background: item.is_active ? Theme.background-elevated : (item_touch.has-hover ? Theme.background-hover : transparent);
+
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 12px;
+                    alignment: center;
+
+                    // Cover thumbnail
+                    Rectangle {
+                        width: 44px;
+                        height: 44px;
+                        border-radius: 4px;
+                        background: item.is_pinned ? #331f54 : #282828;
+
+                        Text {
+                            text: item.is_pinned ? "♥" : "♪";
+                            color: item.is_pinned ? #a855f7 : Theme.text-secondary;
+                            font-size: 18px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    // Title & Subtitle
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        spacing: 2px;
+
+                        Text {
+                            text: item.title;
+                            color: item.is_active ? Theme.accent : Theme.text-primary;
+                            font-size: 14px;
+                            font-weight: 600;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            text: item.subtitle;
+                            color: Theme.text-secondary;
+                            font-size: 12px;
+                            overflow: elide;
+                        }
+                    }
+
+                    if item.is_pinned : Text {
+                        text: "📌";
+                        font-size: 12px;
+                        color: Theme.accent;
+                        vertical-alignment: center;
+                    }
+                }
+
+                item_touch := TouchArea {
+                    clicked => { root.playlist_selected(item.id); }
+                }
+            }
+        }
+    }
+}

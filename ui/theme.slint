@@ -1,0 +1,59 @@
+export global Theme {
+    out property <color> background: #121212;
+    out property <color> background-secondary: #181818;
+    out property <color> background-elevated: #242424;
+    out property <color> background-hover: #2a2a2a;
+    out property <color> background-tint: #1e1e1e;
+    
+    out property <color> accent: #1db954;
+    out property <color> accent-hover: #1ed760;
+    out property <color> accent-press: #1aa34a;
+    
+    out property <color> text-primary: #ffffff;
+    out property <color> text-secondary: #b3b3b3;
+    out property <color> text-muted: #6a6a6a;
+    
+    out property <color> border-color: #282828;
+    out property <color> scrubber-bg: #4d4d4d;
+    out property <color> scrubber-fill: #ffffff;
+    
+    out property <length> radius-small: 4px;
+    out property <length> radius-medium: 8px;
+    out property <length> radius-large: 12px;
+    out property <length> radius-pill: 500px;
+    
+    out property <string> font-family: "CircularStd, Inter, -apple-system, BlinkMacSystemFont, sans-serif";
+}
+
+export struct TrackItem {
+    id: string,
+    index: int,
+    title: string,
+    artist: string,
+    album: string,
+    duration_str: string,
+    play_count_str: string,
+    is_liked: bool,
+    is_playing: bool,
+}
+
+export struct PlaylistItem {
+    id: string,
+    title: string,
+    subtitle: string,
+    is_pinned: bool,
+    is_active: bool,
+}
+
+export struct DeviceItem {
+    id: string,
+    name: string,
+    device_type: string,
+    is_active: bool,
+}
+
+export struct LyricLine {
+    time_ms: int,
+    text: string,
+    is_active: bool,
+}

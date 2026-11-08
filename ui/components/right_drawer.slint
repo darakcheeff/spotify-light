@@ -1,0 +1,435 @@
+import { Theme, TrackItem, DeviceItem } from "../theme.slint";
+
+export component RightDrawer inherits Rectangle {
+    width: 320px;
+    background: Theme.background-secondary;
+    border-radius: Theme.radius-medium;
+    
+    in property <int> mode: 0; // 0: Queue, 1: Connect Devices, 2: Track Details
+    in-out property <int> queue_tab: 0; // 0: Очередь, 1: Недавно прослушано
+    
+    in property <TrackItem> current_track: {
+        id: "cur", index: 1, title: "Spoiler - Recoil", artist: "Hyper, WARGASM (UK)",
+        album: "Cyberpunk 2077", duration_str: "4:00", play_count_str: "", is_liked: true, is_playing: true
+    };
+    
+    in property <[TrackItem]> queue_items: [
+        { id: "q1", index: 1, title: "JOHN CENA", artist: "Joey Valence & Brae", album: "", duration_str: "2:43", play_count_str: "", is_liked: false, is_playing: false },
+        { id: "q2", index: 2, title: "Pray For My Enemies", artist: "Le Castle Vania, Hyper", album: "", duration_str: "3:10", play_count_str: "", is_liked: false, is_playing: false },
+        { id: "q3", index: 3, title: "ENEMIES", artist: "WHO SHOT SCOTT", album: "", duration_str: "2:55", play_count_str: "", is_liked: false, is_playing: false },
+        { id: "q4", index: 4, title: "SiNSation SELLebration", artist: "Alla Xul Elu", album: "", duration_str: "3:30", play_count_str: "", is_liked: false, is_playing: false },
+    ];
+    
+    in property <[TrackItem]> recent_items: [
+        { id: "r1", index: 1, title: "Killshot", artist: "Frost", album: "", duration_str: "2:18", play_count_str: "", is_liked: true, is_playing: false },
+        { id: "r2", index: 2, title: "call you out", artist: "Frost", album: "", duration_str: "3:07", play_count_str: "", is_liked: false, is_playing: false },
+        { id: "r3", index: 3, title: "Engel (Live in Mexico City)", artist: "Rammstein", album: "", duration_str: "5:12", play_count_str: "", is_liked: true, is_playing: false },
+    ];
+
+    in property <[DeviceItem]> devices: [
+        { id: "dev1", name: "Этот компьютер", device_type: "computer", is_active: true },
+        { id: "dev2", name: "Google Home (Кухня)", device_type: "speaker", is_active: false },
+        { id: "dev3", name: "ELS-NX9 (Смартфон)", device_type: "smartphone", is_active: false },
+        { id: "dev4", name: "Living Room TV", device_type: "tv", is_active: false },
+    ];
+
+    callback close_drawer();
+    callback select_device(string);
+    callback play_queue_item(string);
+    callback start_jam();
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 16px;
+
+        // MODE 0: QUEUE & RECENTLY PLAYED
+        if root.mode == 0 : VerticalLayout {
+            spacing: 14px;
+
+            // Header with Tabs & Close button
+            HorizontalLayout {
+                alignment: center;
+                spacing: 12px;
+
+                // Tab: Очередь
+                Rectangle {
+                    height: 28px;
+                    border-bottom-width: root.queue_tab == 0 ? 2px : 0px;
+                    border-color: Theme.accent;
+                    
+                    Text {
+                        text: "Очередь";
+                        color: root.queue_tab == 0 ? Theme.text-primary : Theme.text-secondary;
+                        font-size: 14px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.queue_tab = 0; } }
+                }
+
+                // Tab: Недавно прослушано
+                Rectangle {
+                    height: 28px;
+                    border-bottom-width: root.queue_tab == 1 ? 2px : 0px;
+                    border-color: Theme.accent;
+
+                    Text {
+                        text: "Недавно прослушано";
+                        color: root.queue_tab == 1 ? Theme.text-primary : Theme.text-secondary;
+                        font-size: 14px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.queue_tab = 1; } }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // Close Button ✕
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 14px;
+                    background: close_q.has-hover ? Theme.background-hover : transparent;
+                    
+                    Text {
+                        text: "✕";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    close_q := TouchArea { clicked => { root.close_drawer(); } }
+                }
+            }
+
+            // Tab 0: Queue
+            if root.queue_tab == 0 : VerticalLayout {
+                spacing: 10px;
+
+                Text {
+                    text: "Сейчас играет";
+                    color: Theme.text-secondary;
+                    font-size: 12px;
+                    font-weight: 700;
+                }
+
+                // Now Playing Card
+                Rectangle {
+                    height: 60px;
+                    border-radius: 6px;
+                    background: Theme.background-elevated;
+
+                    HorizontalLayout {
+                        padding: 8px;
+                        spacing: 12px;
+                        alignment: center;
+
+                        Rectangle {
+                            width: 44px;
+                            height: 44px;
+                            border-radius: 4px;
+                            background: #333333;
+                            Text {
+                                text: "▶";
+                                color: Theme.accent;
+                                font-size: 16px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            spacing: 2px;
+
+                            Text {
+                                text: root.current_track.title;
+                                color: Theme.accent;
+                                font-size: 14px;
+                                font-weight: 700;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: root.current_track.artist;
+                                color: Theme.text-secondary;
+                                font-size: 12px;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Далее";
+                    color: Theme.text-secondary;
+                    font-size: 12px;
+                    font-weight: 700;
+                }
+
+                ListView {
+                    vertical-stretch: 1;
+                    for item in root.queue_items : Rectangle {
+                        height: 52px;
+                        border-radius: 4px;
+                        background: q_item_touch.has-hover ? Theme.background-hover : transparent;
+
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 10px;
+                            alignment: center;
+
+                            Rectangle {
+                                width: 38px;
+                                height: 38px;
+                                border-radius: 4px;
+                                background: #262626;
+                                Text {
+                                    text: "♪";
+                                    color: Theme.text-secondary;
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                alignment: center;
+                                spacing: 2px;
+
+                                Text {
+                                    text: item.title;
+                                    color: Theme.text-primary;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: item.artist;
+                                    color: Theme.text-secondary;
+                                    font-size: 11px;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+
+                        q_item_touch := TouchArea {
+                            clicked => { root.play_queue_item(item.id); }
+                        }
+                    }
+                }
+            }
+
+            // Tab 1: Recently Played History
+            if root.queue_tab == 1 : VerticalLayout {
+                spacing: 10px;
+
+                Text {
+                    text: "История прослушиваний";
+                    color: Theme.text-secondary;
+                    font-size: 12px;
+                    font-weight: 700;
+                }
+
+                ListView {
+                    vertical-stretch: 1;
+                    for item in root.recent_items : Rectangle {
+                        height: 52px;
+                        border-radius: 4px;
+                        background: r_item_touch.has-hover ? Theme.background-hover : transparent;
+
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 10px;
+                            alignment: center;
+
+                            Rectangle {
+                                width: 38px;
+                                height: 38px;
+                                border-radius: 4px;
+                                background: #262626;
+                                Text {
+                                    text: "♪";
+                                    color: Theme.text-secondary;
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                alignment: center;
+                                spacing: 2px;
+
+                                Text {
+                                    text: item.title;
+                                    color: Theme.text-primary;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: item.artist;
+                                    color: Theme.text-secondary;
+                                    font-size: 11px;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+
+                        r_item_touch := TouchArea {
+                            clicked => { root.play_queue_item(item.id); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // MODE 1: CONNECT TO A DEVICE (Google Home, Speakers, etc.)
+        if root.mode == 1 : VerticalLayout {
+            spacing: 16px;
+
+            // Header
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: "Connect";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                    horizontal-stretch: 1;
+                }
+
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 14px;
+                    background: close_c.has-hover ? Theme.background-hover : transparent;
+
+                    Text {
+                        text: "✕";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    close_c := TouchArea { clicked => { root.close_drawer(); } }
+                }
+            }
+
+            // Jam banner
+            Rectangle {
+                height: 64px;
+                border-radius: 8px;
+                background: Theme.background-elevated;
+
+                HorizontalLayout {
+                    padding: 10px;
+                    spacing: 10px;
+                    alignment: center;
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        Text {
+                            text: "Слушай с друзьями";
+                            color: Theme.text-primary;
+                            font-size: 12px;
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: "где угодно";
+                            color: Theme.text-secondary;
+                            font-size: 11px;
+                        }
+                    }
+
+                    Rectangle {
+                        width: 100px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: jam_touch.has-hover ? #f0f0f0 : #ffffff;
+
+                        Text {
+                            text: "Начать джем";
+                            color: #000000;
+                            font-size: 11px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        jam_touch := TouchArea { clicked => { root.start_jam(); } }
+                    }
+                }
+            }
+
+            Text {
+                text: "Доступные устройства";
+                color: Theme.text-secondary;
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            // Devices List
+            ListView {
+                vertical-stretch: 1;
+                for dev in root.devices : Rectangle {
+                    height: 56px;
+                    border-radius: 6px;
+                    background: dev.is_active ? Theme.background-elevated : (dev_touch.has-hover ? Theme.background-hover : transparent);
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 14px;
+                        alignment: center;
+
+                        Text {
+                            text: dev.device_type == "speaker" ? "🔊" : (dev.device_type == "tv" ? "📺" : (dev.device_type == "smartphone" ? "📱" : "💻"));
+                            font-size: 18px;
+                            vertical-alignment: center;
+                        }
+
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            spacing: 2px;
+
+                            Text {
+                                text: dev.name;
+                                color: dev.is_active ? Theme.accent : Theme.text-primary;
+                                font-size: 14px;
+                                font-weight: dev.is_active ? 700 : 500;
+                                overflow: elide;
+                            }
+
+                            if dev.is_active : Text {
+                                text: "Spotify Connect • Воспроизведение здесь";
+                                color: Theme.accent;
+                                font-size: 11px;
+                            }
+                        }
+                    }
+
+                    dev_touch := TouchArea {
+                        clicked => { root.select_device(dev.id); }
+                    }
+                }
+            }
+
+            // Bottom link
+            Text {
+                text: "Твоего устройства здесь нет? ↗";
+                color: Theme.text-muted;
+                font-size: 11px;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}

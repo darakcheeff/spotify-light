@@ -11,7 +11,7 @@ use audio::{AudioCommand, AudioEngine};
 use discovery::SpeakerDiscovery;
 use mpris::MprisService;
 use librespot::core::session::Session;
-use slint::{ComponentHandle, ModelRc, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
@@ -127,6 +127,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     app.on_search_query(move |query| {
         info!("[UI ACTION] Search query entered: '{}'", query);
+    });
+
+    app.on_filter_library({
+        move |filter_idx| {
+            info!("[UI ACTION] Library filter selected: {}", filter_idx);
+        }
     });
 
     app.on_play_track({

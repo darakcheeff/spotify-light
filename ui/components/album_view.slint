@@ -15,34 +15,36 @@ export component AlbumView inherits Rectangle {
     callback like_track(string);
 
     Flickable {
-        content-height: (root.tracks.length * 56px) + 420px;
+        content-height: (root.tracks.length * 56px) + 440px;
 
         VerticalLayout {
-            // 1. Hero Header with Gradient
+            alignment: start;
+
+            // 1. Hero Header with Gradient (matching Spotify 7.png / 8.png)
             Rectangle {
-                height: 280px;
+                height: 260px;
                 background: @linear-gradient(180deg, #1e3a8a 0%, #121212 100%);
 
                 HorizontalLayout {
                     padding-left: 32px;
                     padding-right: 32px;
                     padding-bottom: 24px;
-                    spacing: 28px;
+                    spacing: 24px;
                     alignment: end;
 
                     // Cover Art
                     Rectangle {
-                        width: 192px;
-                        height: 192px;
+                        width: 180px;
+                        height: 180px;
                         border-radius: 6px;
                         background: #0f172a;
-                        drop-shadow-blur: 32px;
+                        drop-shadow-blur: 24px;
                         drop-shadow-color: #000000;
 
                         Text {
-                            text: root.album_title != "" ? "♪" : "";
+                            text: "♪";
                             color: Theme.accent;
-                            font-size: 48px;
+                            font-size: 54px;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
@@ -63,13 +65,13 @@ export component AlbumView inherits Rectangle {
                         Text {
                             text: root.album_title != "" ? root.album_title : "Медиатека";
                             color: Theme.text-primary;
-                            font-size: 44px;
+                            font-size: 40px;
                             font-weight: 900;
                             overflow: elide;
                         }
 
                         Text {
-                            text: root.album_desc != "" ? root.album_desc : "Треков: " + root.tracks.length;
+                            text: "Треков: " + root.tracks.length;
                             color: Theme.text-secondary;
                             font-size: 13px;
                             font-weight: 500;
@@ -80,7 +82,7 @@ export component AlbumView inherits Rectangle {
 
             // 2. Actions Bar (Play, Shuffle, Like, More)
             if root.tracks.length > 0 : Rectangle {
-                height: 84px;
+                height: 72px;
                 background: Theme.background;
 
                 HorizontalLayout {
@@ -91,33 +93,35 @@ export component AlbumView inherits Rectangle {
 
                     // Big Green Play Button
                     Rectangle {
-                        width: 56px;
-                        height: 56px;
-                        border-radius: 28px;
+                        width: 52px;
+                        height: 52px;
+                        border-radius: 26px;
                         background: big_play.has-hover ? Theme.accent-hover : Theme.accent;
 
                         Text {
                             text: "▶";
                             color: #000000;
-                            font-size: 24px;
+                            font-size: 22px;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
 
-                        big_play := TouchArea { clicked => { root.play_all(); } }
+                        big_play := TouchArea {
+                            clicked => { root.play_all(); }
+                        }
                     }
 
-                    Text { text: "🔀"; font-size: 24px; color: Theme.text-secondary; }
-                    Text { text: "⊕"; font-size: 28px; color: Theme.text-secondary; }
-                    Text { text: "↓"; font-size: 24px; color: Theme.text-secondary; }
-                    Text { text: "•••"; font-size: 24px; color: Theme.text-secondary; }
+                    Text { text: "🔀"; font-size: 22px; color: Theme.text-secondary; }
+                    Text { text: "⊕"; font-size: 26px; color: Theme.text-secondary; }
+                    Text { text: "↓"; font-size: 22px; color: Theme.text-secondary; }
+                    Text { text: "•••"; font-size: 22px; color: Theme.text-secondary; }
 
                     Rectangle { horizontal-stretch: 1; }
 
                     Text {
                         text: "Список :≡";
                         color: Theme.text-secondary;
-                        font-size: 14px;
+                        font-size: 13px;
                         font-weight: 600;
                         vertical-alignment: center;
                     }
@@ -139,7 +143,7 @@ export component AlbumView inherits Rectangle {
                 }
 
                 Text {
-                    text: "После выбора или воспроизведения треки появятся здесь";
+                    text: "После выбора треки появятся здесь";
                     color: Theme.text-secondary;
                     font-size: 13px;
                     horizontal-alignment: center;
@@ -151,7 +155,7 @@ export component AlbumView inherits Rectangle {
                 padding-left: 32px;
                 padding-right: 32px;
                 padding-bottom: 32px;
-                spacing: 8px;
+                spacing: 4px;
 
                 // Table Header
                 VerticalLayout {
@@ -163,9 +167,9 @@ export component AlbumView inherits Rectangle {
                         spacing: 16px;
                         alignment: center;
 
-                        Text { width: 30px; text: "#"; color: Theme.text-secondary; font-size: 12px; }
+                        Text { width: 36px; text: "#"; color: Theme.text-secondary; font-size: 12px; }
                         Text { horizontal-stretch: 1; text: "Название"; color: Theme.text-secondary; font-size: 12px; }
-                        Text { width: 140px; text: "Прослушивания"; color: Theme.text-secondary; font-size: 12px; }
+                        Text { width: 180px; text: "Альбом"; color: Theme.text-secondary; font-size: 12px; }
                         Text { width: 60px; text: "🕒"; color: Theme.text-secondary; font-size: 12px; horizontal-alignment: right; }
                     }
 
@@ -177,7 +181,7 @@ export component AlbumView inherits Rectangle {
 
                 // Table Rows
                 for trk in root.tracks : Rectangle {
-                    height: 54px;
+                    height: 56px;
                     border-radius: 4px;
                     background: trk.is_playing ? Theme.background-elevated : (row_touch.has-hover ? Theme.background-hover : transparent);
 
@@ -189,53 +193,68 @@ export component AlbumView inherits Rectangle {
 
                         // Index or Play Icon
                         Text {
-                            width: 30px;
+                            width: 36px;
                             text: trk.is_playing ? "▶" : trk.index;
                             color: trk.is_playing ? Theme.accent : Theme.text-secondary;
                             font-size: 13px;
                             font-weight: trk.is_playing ? 700 : 500;
                         }
 
-                        // Title + Artist
-                        VerticalLayout {
+                        // Thumbnail artwork + Title + Artist
+                        HorizontalLayout {
                             horizontal-stretch: 1;
+                            spacing: 12px;
                             alignment: center;
-                            spacing: 2px;
 
-                            Text {
-                                text: trk.title;
-                                color: trk.is_playing ? Theme.accent : Theme.text-primary;
-                                font-size: 14px;
-                                font-weight: 600;
-                                overflow: elide;
+                            Rectangle {
+                                width: 40px;
+                                height: 40px;
+                                border-radius: 4px;
+                                background: #282828;
+
+                                Text {
+                                    text: "♪";
+                                    color: Theme.accent;
+                                    font-size: 18px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
                             }
-                            Text {
-                                text: trk.artist;
-                                color: Theme.text-secondary;
-                                font-size: 12px;
-                                overflow: elide;
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                alignment: center;
+                                spacing: 2px;
+
+                                Text {
+                                    text: trk.title;
+                                    color: trk.is_playing ? Theme.accent : Theme.text-primary;
+                                    font-size: 14px;
+                                    font-weight: 600;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: trk.artist;
+                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                    overflow: elide;
+                                }
                             }
                         }
 
-                        // Play count
+                        // Album name
                         Text {
-                            width: 140px;
-                            text: trk.play_count_str;
+                            width: 180px;
+                            text: trk.album != "" ? trk.album : root.album_title;
                             color: Theme.text-secondary;
                             font-size: 13px;
-                        }
-
-                        // Like mark
-                        Text {
-                            text: trk.is_liked ? "✔" : "";
-                            color: Theme.accent;
-                            font-size: 14px;
+                            overflow: elide;
                         }
 
                         // Duration
                         Text {
-                            width: 50px;
-                            text: trk.duration_str;
+                            width: 60px;
+                            text: trk.duration_str != "" ? trk.duration_str : "3:24";
                             color: Theme.text-secondary;
                             font-size: 13px;
                             horizontal-alignment: right;

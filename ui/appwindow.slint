@@ -5,11 +5,13 @@ import { PlayerBar } from "components/player_bar.slint";
 import { RightDrawer } from "components/right_drawer.slint";
 import { HomeView } from "components/home_view.slint";
 import { AlbumView } from "components/album_view.slint";
+import { BrowseView } from "components/browse_view.slint";
 import { LyricsView } from "components/lyrics_view.slint";
 import { LoginDialog } from "components/login_dialog.slint";
 
 export component AppWindow inherits Window {
     title: "SpotifyLight";
+    icon: @image-url("../assets/icon.png");
     min-width: 960px;
     min-height: 640px;
     preferred-width: 1280px;
@@ -22,7 +24,7 @@ export component AppWindow inherits Window {
     in-out property <string> auth_error: "";
     in-out property <bool> auth_loading: false;
 
-    in-out property <int> current_workspace: 0; // 0: Home, 1: Album/Playlist
+    in-out property <int> current_workspace: 0; // 0: Home, 1: Album/Playlist, 2: Browse
     in-out property <bool> is_lyrics_open: false;
     in-out property <bool> is_drawer_open: false;
     in-out property <int> drawer_mode: 0; // 0: Queue, 1: Connect Devices
@@ -56,6 +58,7 @@ export component AppWindow inherits Window {
     callback select_connect_device(string);
     callback search_query(string);
     callback select_playlist(string);
+    callback filter_library(int);
     callback play_track(string);
     callback email_submitted(string);
     callback login_requested(string, string);
@@ -70,6 +73,7 @@ export component AppWindow inherits Window {
         TopBar {
             is_authenticated: root.is_authenticated;
             user_name: root.user_display_name;
+            is_home_active: root.current_workspace == 0;
             nav_back => {
                 if root.current_workspace > 0 {
                     root.current_workspace = 0;
@@ -77,6 +81,10 @@ export component AppWindow inherits Window {
             }
             nav_home => {
                 root.current_workspace = 0;
+                root.is_lyrics_open = false;
+            }
+            open_browse => {
+                root.current_workspace = 2;
                 root.is_lyrics_open = false;
             }
             search_changed(query) => {
@@ -98,6 +106,9 @@ export component AppWindow inherits Window {
             Sidebar {
                 is_authenticated: root.is_authenticated;
                 playlists: root.user_playlists;
+                filter_selected(idx) => {
+                    root.filter_library(idx);
+                }
                 playlist_selected(id) => {
                     root.current_workspace = 1;
                     root.is_lyrics_open = false;
@@ -145,6 +156,14 @@ export component AppWindow inherits Window {
                         }
                     }
                     track_clicked(id) => { root.play_track(id); }
+                }
+
+                // View 4: Browse / Обзор View (matching 6.png)
+                BrowseView {
+                    visible: !root.is_lyrics_open && root.current_workspace == 2;
+                    category_clicked(name) => {
+                        root.search_query(name);
+                    }
                 }
             }
 

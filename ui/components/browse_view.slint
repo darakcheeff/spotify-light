@@ -1,0 +1,104 @@
+import { Theme } from "../theme.slint";
+
+struct CategoryCard {
+    title: string,
+    color: color,
+    icon: string,
+}
+
+export component BrowseView inherits Rectangle {
+    background: transparent;
+
+    callback category_clicked(string);
+
+    property <[CategoryCard]> categories: [
+        { title: "Музыка", color: #e1306c, icon: "🎵" },
+        { title: "Подкасты", color: #006450, icon: "🎙" },
+        { title: "Аудиокниги", color: #1e3a8a, icon: "📖" },
+        { title: "Мероприятия", color: #8400e7, icon: "🎟" },
+        { title: "Фитнес", color: #503750, icon: "🏃" },
+        { title: "Для тебя", color: #1e3264, icon: "✨" },
+        { title: "Новые релизы", color: #27856a, icon: "🆕" },
+        { title: "Настроение", color: #e91429, icon: "🎭" },
+        { title: "Набирает популярность", color: #8c1932, icon: "🔥" },
+        { title: "Чарты", color: #8d67ab, icon: "📊" },
+        { title: "Образование", color: #477d95, icon: "🎓" },
+        { title: "Документалистика", color: #503750, icon: "🎬" },
+        { title: "Юмор", color: #af2896, icon: "😄" },
+        { title: "Dance", color: #148a08, icon: "🪩" },
+        { title: "Рок", color: #b02897, icon: "🎸" },
+        { title: "Хип-хоп", color: #bc5900, icon: "🎧" }
+    ];
+
+    Flickable {
+        content-height: 850px;
+
+        VerticalLayout {
+            padding-left: 24px;
+            padding-right: 24px;
+            padding-top: 20px;
+            padding-bottom: 40px;
+            spacing: 20px;
+            alignment: start;
+
+            Text {
+                text: "Все остальное";
+                color: Theme.text-primary;
+                font-size: 24px;
+                font-weight: 800;
+            }
+
+            // Grid of Categories (4 cards per row, 4 rows = 16 cards)
+            for row_idx in 4 : HorizontalLayout {
+                spacing: 16px;
+                height: 140px;
+
+                for col_idx in 4 : Rectangle {
+                    property <int> card_idx: row_idx * 4 + col_idx;
+                    property <CategoryCard> card: root.categories[card_idx];
+
+                    horizontal-stretch: 1;
+                    height: 140px;
+                    border-radius: Theme.radius-medium;
+                    background: card.color;
+                    clip: true;
+
+                    // Title
+                    Text {
+                        x: 16px;
+                        y: 16px;
+                        text: card.title;
+                        color: #ffffff;
+                        font-size: 20px;
+                        font-weight: 800;
+                        overflow: elide;
+                        width: 140px;
+                    }
+
+                    // Decorative Icon Badge (rotated style like Spotify)
+                    Rectangle {
+                        x: parent.width - 64px;
+                        y: parent.height - 64px;
+                        width: 60px;
+                        height: 60px;
+                        border-radius: 6px;
+                        background: #00000044;
+
+                        Text {
+                            text: card.icon;
+                            font-size: 32px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    card_touch := TouchArea {
+                        clicked => {
+                            root.category_clicked(card.title);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

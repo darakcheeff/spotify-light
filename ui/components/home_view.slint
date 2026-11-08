@@ -1,5 +1,11 @@
 import { Theme, PlaylistItem } from "../theme.slint";
 
+struct MixCard {
+    title: string,
+    subtitle: string,
+    color: color,
+}
+
 export component HomeView inherits Rectangle {
     background: transparent;
     
@@ -11,17 +17,25 @@ export component HomeView inherits Rectangle {
     callback open_album(string);
     callback login_clicked();
 
+    property <[MixCard]> daily_mixes: [
+        { title: "Микс дня #1", subtitle: "Ундервуд, БИРТМАН, Мельница и не только", color: #006450 },
+        { title: "Микс дня #2", subtitle: "Airbourne, Dogma, Halestorm и не только", color: #e91429 },
+        { title: "Микс дня #3", subtitle: "Йорш, Порнофильмы, Другой Ветер и не только", color: #8400e7 },
+        { title: "Микс дня #4", subtitle: "Plamenev, Марко Поло, Louna и не только", color: #e1306c }
+    ];
+
     Flickable {
-        content-height: (root.playlists.length * 68px) + 320px;
+        content-height: 950px;
 
         VerticalLayout {
             padding-left: 24px;
             padding-right: 24px;
             padding-top: 16px;
-            padding-bottom: 32px;
+            padding-bottom: 40px;
             spacing: 24px;
+            alignment: start;
 
-            // 1. Top Category Chips
+            // 1. Top Category Chips (Все, Музыка, Подкасты, Аудиокниги)
             HorizontalLayout {
                 spacing: 8px;
                 for chip_text[idx] in ["Все", "Музыка", "Подкасты", "Аудиокниги"] : Rectangle {
@@ -99,78 +113,247 @@ export component HomeView inherits Rectangle {
                 }
             }
 
-            // 3. Authenticated Content (Playlists Catalog)
-            if root.is_authenticated : VerticalLayout {
-                spacing: 16px;
+            // 3. Quick Access 2x4 Grid (matching official Spotify Desktop 5.png)
+            if root.is_authenticated && root.playlists.length > 0 : VerticalLayout {
+                spacing: 12px;
 
-                Text {
-                    text: "Ваша медиатека";
-                    color: Theme.text-primary;
-                    font-size: 24px;
-                    font-weight: 800;
-                }
+                for row_idx in 2 : HorizontalLayout {
+                    spacing: 12px;
+                    height: 58px;
 
-                if root.playlists.length == 0 : Text {
-                    text: "Загрузка плейлистов...";
-                    color: Theme.text-secondary;
-                    font-size: 14px;
-                }
+                    for col_idx in 4 : Rectangle {
+                        property <int> p_idx: row_idx * 4 + col_idx;
+                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false };
+                        property <bool> is_valid: pl.id != "";
 
-                if root.playlists.length > 0 : VerticalLayout {
-                    spacing: 8px;
-                    for pl in root.playlists : Rectangle {
-                        height: 64px;
-                        border-radius: Theme.radius-medium;
-                        background: card_touch.has-hover ? Theme.background-hover : Theme.background-elevated;
+                        horizontal-stretch: 1;
+                        height: 58px;
+                        border-radius: 4px;
+                        background: card_touch.has-hover ? #383838 : #282828;
+                        visible: is_valid;
 
                         HorizontalLayout {
-                            padding-left: 16px;
-                            padding-right: 16px;
-                            spacing: 16px;
+                            padding-right: 12px;
+                            spacing: 12px;
                             alignment: center;
 
+                            // Left square artwork
                             Rectangle {
-                                width: 44px;
-                                height: 44px;
+                                width: 58px;
+                                height: 58px;
                                 border-radius: 4px;
-                                background: #282828;
+                                background: @linear-gradient(135deg, #4a148c 0%, #1e1b4b 100%);
+
                                 Text {
                                     text: "♪";
-                                    color: Theme.accent;
-                                    font-size: 20px;
+                                    color: #ffffff;
+                                    font-size: 24px;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
                             }
 
-                            VerticalLayout {
+                            // Title
+                            Text {
                                 horizontal-stretch: 1;
-                                alignment: center;
-                                spacing: 2px;
-                                Text {
-                                    text: pl.title;
-                                    color: Theme.text-primary;
-                                    font-size: 15px;
-                                    font-weight: 700;
-                                    overflow: elide;
-                                }
-                                Text {
-                                    text: pl.subtitle;
-                                    color: Theme.text-secondary;
-                                    font-size: 12px;
-                                    overflow: elide;
-                                }
+                                text: pl.title;
+                                color: Theme.text-primary;
+                                font-size: 13px;
+                                font-weight: 700;
+                                overflow: elide;
+                                vertical-alignment: center;
                             }
 
-                            Text {
-                                text: "▶";
-                                color: Theme.accent;
-                                font-size: 16px;
-                                vertical-alignment: center;
+                            // Hover Play Button
+                            Rectangle {
+                                width: 36px;
+                                height: 36px;
+                                border-radius: 18px;
+                                background: Theme.accent;
+                                visible: card_touch.has-hover;
+
+                                Text {
+                                    text: "▶";
+                                    color: #000000;
+                                    font-size: 14px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
                             }
                         }
 
                         card_touch := TouchArea {
+                            clicked => { root.open_album(pl.id); }
+                        }
+                    }
+                }
+            }
+
+            // 4. Section "Для тебя" (Daily Mixes / Recommendations matching 5.png)
+            if root.is_authenticated : VerticalLayout {
+                spacing: 14px;
+
+                HorizontalLayout {
+                    Text {
+                        text: "Для тебя";
+                        color: Theme.text-primary;
+                        font-size: 22px;
+                        font-weight: 800;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "Показать все";
+                        color: Theme.text-secondary;
+                        font-size: 13px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 16px;
+
+                    for mix in root.daily_mixes : Rectangle {
+                        horizontal-stretch: 1;
+                        height: 240px;
+                        border-radius: Theme.radius-medium;
+                        background: mix_touch.has-hover ? #242424 : #181818;
+
+                        VerticalLayout {
+                            padding: 12px;
+                            spacing: 10px;
+                            alignment: start;
+
+                            // Artwork box with banner
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 140px;
+                                border-radius: 6px;
+                                background: mix.color;
+
+                                Text {
+                                    x: 10px;
+                                    y: 10px;
+                                    text: "SPOTIFY";
+                                    color: #00000055;
+                                    font-size: 10px;
+                                    font-weight: 900;
+                                }
+
+                                Text {
+                                    x: 10px;
+                                    y: parent.height - 30px;
+                                    text: mix.title;
+                                    color: #ffffff;
+                                    font-size: 16px;
+                                    font-weight: 800;
+                                }
+                            }
+
+                            Text {
+                                text: mix.title;
+                                color: Theme.text-primary;
+                                font-size: 14px;
+                                font-weight: 700;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: mix.subtitle;
+                                color: Theme.text-secondary;
+                                font-size: 11px;
+                                overflow: elide;
+                            }
+                        }
+
+                        mix_touch := TouchArea {
+                            clicked => {
+                                if (root.playlists.length > 0) {
+                                    root.open_album(root.playlists[0].id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5. Section "Недавние" (Recent library items matching 5.png)
+            if root.is_authenticated && root.playlists.length > 4 : VerticalLayout {
+                spacing: 14px;
+
+                HorizontalLayout {
+                    Text {
+                        text: "Недавние";
+                        color: Theme.text-primary;
+                        font-size: 22px;
+                        font-weight: 800;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "Показать все";
+                        color: Theme.text-secondary;
+                        font-size: 13px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 16px;
+
+                    for idx in 4 : Rectangle {
+                        property <int> p_idx: idx + 4;
+                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false };
+                        property <bool> is_valid: pl.id != "";
+
+                        horizontal-stretch: 1;
+                        height: 240px;
+                        border-radius: Theme.radius-medium;
+                        background: rec_touch.has-hover ? #242424 : #181818;
+                        visible: is_valid;
+
+                        VerticalLayout {
+                            padding: 12px;
+                            spacing: 10px;
+                            alignment: start;
+
+                            // Artwork box
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 140px;
+                                border-radius: 6px;
+                                background: #282828;
+
+                                Text {
+                                    text: "♪";
+                                    color: Theme.accent;
+                                    font-size: 32px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Text {
+                                text: pl.title;
+                                color: Theme.text-primary;
+                                font-size: 14px;
+                                font-weight: 700;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: pl.subtitle;
+                                color: Theme.text-secondary;
+                                font-size: 11px;
+                                overflow: elide;
+                            }
+                        }
+
+                        rec_touch := TouchArea {
                             clicked => { root.open_album(pl.id); }
                         }
                     }

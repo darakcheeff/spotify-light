@@ -43,6 +43,8 @@ jobs:
           mkdir -p "${PKG_DIR}/DEBIAN"
           mkdir -p "${PKG_DIR}/usr/bin"
           mkdir -p "${PKG_DIR}/usr/share/applications"
+          mkdir -p "${PKG_DIR}/usr/share/pixmaps"
+          mkdir -p "${PKG_DIR}/usr/share/icons/hicolor/256x256/apps"
           mkdir -p "${PKG_DIR}/usr/share/icons/hicolor/scalable/apps"
 
           # Copy binary
@@ -52,7 +54,11 @@ jobs:
           # Copy desktop entry
           cp packaging/debian/spotify-light.desktop "${PKG_DIR}/usr/share/applications/spotify-light.desktop"
 
-          # Create placeholder icon
+          # Install standard PNG application icons for X11/MATE/GNOME desktop taskbars
+          cp assets/icon.png "${PKG_DIR}/usr/share/pixmaps/spotify-light.png"
+          cp assets/icon.png "${PKG_DIR}/usr/share/icons/hicolor/256x256/apps/spotify-light.png"
+
+          # Create scalable icon
           cat << 'EOF' > "${PKG_DIR}/usr/share/icons/hicolor/scalable/apps/spotify-light.svg"
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="48" fill="#1DB954"/>

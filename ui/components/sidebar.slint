@@ -121,69 +121,73 @@ export component Sidebar inherits Rectangle {
             }
         }
 
-        // Playlists list
-        ListView {
+        // Playlists list inside Flickable
+        Flickable {
             vertical-stretch: 1;
             
-            for item in root.playlists : Rectangle {
-                height: 56px;
-                border-radius: Theme.radius-small;
-                background: item.is_active ? Theme.background-elevated : (item_touch.has-hover ? Theme.background-hover : transparent);
+            VerticalLayout {
+                spacing: 4px;
 
-                HorizontalLayout {
-                    padding-left: 8px;
-                    padding-right: 8px;
-                    spacing: 12px;
-                    alignment: center;
+                for item in root.playlists : Rectangle {
+                    height: 56px;
+                    border-radius: Theme.radius-small;
+                    background: item.is_active ? Theme.background-elevated : (item_touch.has-hover ? Theme.background-hover : transparent);
 
-                    // Cover thumbnail
-                    Rectangle {
-                        width: 44px;
-                        height: 44px;
-                        border-radius: 4px;
-                        background: item.is_pinned ? #331f54 : #282828;
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 12px;
+                        alignment: center;
 
-                        Text {
-                            text: item.is_pinned ? "♥" : "♪";
-                            color: item.is_pinned ? #a855f7 : Theme.text-secondary;
-                            font-size: 18px;
-                            horizontal-alignment: center;
+                        // Cover thumbnail
+                        Rectangle {
+                            width: 44px;
+                            height: 44px;
+                            border-radius: 4px;
+                            background: item.is_pinned ? #331f54 : #282828;
+
+                            Text {
+                                text: item.is_pinned ? "♥" : "♪";
+                                color: item.is_pinned ? #a855f7 : Theme.text-secondary;
+                                font-size: 18px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        // Title & Subtitle
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            spacing: 2px;
+
+                            Text {
+                                text: item.title;
+                                color: item.is_active ? Theme.accent : Theme.text-primary;
+                                font-size: 14px;
+                                font-weight: 600;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: item.subtitle;
+                                color: Theme.text-secondary;
+                                font-size: 12px;
+                                overflow: elide;
+                            }
+                        }
+
+                        if item.is_pinned : Text {
+                            text: "📌";
+                            font-size: 12px;
+                            color: Theme.accent;
                             vertical-alignment: center;
                         }
                     }
 
-                    // Title & Subtitle
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        alignment: center;
-                        spacing: 2px;
-
-                        Text {
-                            text: item.title;
-                            color: item.is_active ? Theme.accent : Theme.text-primary;
-                            font-size: 14px;
-                            font-weight: 600;
-                            overflow: elide;
-                        }
-
-                        Text {
-                            text: item.subtitle;
-                            color: Theme.text-secondary;
-                            font-size: 12px;
-                            overflow: elide;
-                        }
+                    item_touch := TouchArea {
+                        clicked => { root.playlist_selected(item.id); }
                     }
-
-                    if item.is_pinned : Text {
-                        text: "📌";
-                        font-size: 12px;
-                        color: Theme.accent;
-                        vertical-alignment: center;
-                    }
-                }
-
-                item_touch := TouchArea {
-                    clicked => { root.playlist_selected(item.id); }
                 }
             }
         }

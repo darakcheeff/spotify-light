@@ -168,56 +168,59 @@ export component RightDrawer inherits Rectangle {
                     font-weight: 700;
                 }
 
-                ListView {
+                Flickable {
                     vertical-stretch: 1;
-                    for item in root.queue_items : Rectangle {
-                        height: 52px;
-                        border-radius: 4px;
-                        background: q_item_touch.has-hover ? Theme.background-hover : transparent;
+                    VerticalLayout {
+                        spacing: 4px;
+                        for item in root.queue_items : Rectangle {
+                            height: 52px;
+                            border-radius: 4px;
+                            background: q_item_touch.has-hover ? Theme.background-hover : transparent;
 
-                        HorizontalLayout {
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            spacing: 10px;
-                            alignment: center;
-
-                            Rectangle {
-                                width: 38px;
-                                height: 38px;
-                                border-radius: 4px;
-                                background: #262626;
-                                Text {
-                                    text: "♪";
-                                    color: Theme.text-secondary;
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-
-                            VerticalLayout {
-                                horizontal-stretch: 1;
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                padding-right: 6px;
+                                spacing: 10px;
                                 alignment: center;
-                                spacing: 2px;
 
-                                Text {
-                                    text: item.title;
-                                    color: Theme.text-primary;
-                                    font-size: 13px;
-                                    font-weight: 600;
-                                    overflow: elide;
+                                Rectangle {
+                                    width: 38px;
+                                    height: 38px;
+                                    border-radius: 4px;
+                                    background: #262626;
+                                    Text {
+                                        text: "♪";
+                                        color: Theme.text-secondary;
+                                        font-size: 16px;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
                                 }
-                                Text {
-                                    text: item.artist;
-                                    color: Theme.text-secondary;
-                                    font-size: 11px;
-                                    overflow: elide;
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+
+                                    Text {
+                                        text: item.title;
+                                        color: Theme.text-primary;
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        text: item.artist;
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        overflow: elide;
+                                    }
                                 }
                             }
-                        }
 
-                        q_item_touch := TouchArea {
-                            clicked => { root.play_queue_item(item.id); }
+                            q_item_touch := TouchArea {
+                                clicked => { root.play_queue_item(item.id); }
+                            }
                         }
                     }
                 }
@@ -234,56 +237,59 @@ export component RightDrawer inherits Rectangle {
                     font-weight: 700;
                 }
 
-                ListView {
+                Flickable {
                     vertical-stretch: 1;
-                    for item in root.recent_items : Rectangle {
-                        height: 52px;
-                        border-radius: 4px;
-                        background: r_item_touch.has-hover ? Theme.background-hover : transparent;
+                    VerticalLayout {
+                        spacing: 4px;
+                        for item in root.recent_items : Rectangle {
+                            height: 52px;
+                            border-radius: 4px;
+                            background: r_item_touch.has-hover ? Theme.background-hover : transparent;
 
-                        HorizontalLayout {
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            spacing: 10px;
-                            alignment: center;
-
-                            Rectangle {
-                                width: 38px;
-                                height: 38px;
-                                border-radius: 4px;
-                                background: #262626;
-                                Text {
-                                    text: "♪";
-                                    color: Theme.text-secondary;
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-
-                            VerticalLayout {
-                                horizontal-stretch: 1;
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                padding-right: 6px;
+                                spacing: 10px;
                                 alignment: center;
-                                spacing: 2px;
 
-                                Text {
-                                    text: item.title;
-                                    color: Theme.text-primary;
-                                    font-size: 13px;
-                                    font-weight: 600;
-                                    overflow: elide;
+                                Rectangle {
+                                    width: 38px;
+                                    height: 38px;
+                                    border-radius: 4px;
+                                    background: #262626;
+                                    Text {
+                                        text: "♪";
+                                        color: Theme.text-secondary;
+                                        font-size: 16px;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
                                 }
-                                Text {
-                                    text: item.artist;
-                                    color: Theme.text-secondary;
-                                    font-size: 11px;
-                                    overflow: elide;
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+
+                                    Text {
+                                        text: item.title;
+                                        color: Theme.text-primary;
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        text: item.artist;
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        overflow: elide;
+                                    }
                                 }
                             }
-                        }
 
-                        r_item_touch := TouchArea {
-                            clicked => { root.play_queue_item(item.id); }
+                            r_item_touch := TouchArea {
+                                clicked => { root.play_queue_item(item.id); }
+                            }
                         }
                     }
                 }
@@ -376,49 +382,52 @@ export component RightDrawer inherits Rectangle {
                 font-weight: 700;
             }
 
-            // Devices List
-            ListView {
+            // Devices List inside Flickable
+            Flickable {
                 vertical-stretch: 1;
-                for dev in root.devices : Rectangle {
-                    height: 56px;
-                    border-radius: 6px;
-                    background: dev.is_active ? Theme.background-elevated : (dev_touch.has-hover ? Theme.background-hover : transparent);
+                VerticalLayout {
+                    spacing: 6px;
+                    for dev in root.devices : Rectangle {
+                        height: 56px;
+                        border-radius: 6px;
+                        background: dev.is_active ? Theme.background-elevated : (dev_touch.has-hover ? Theme.background-hover : transparent);
 
-                    HorizontalLayout {
-                        padding-left: 12px;
-                        padding-right: 12px;
-                        spacing: 14px;
-                        alignment: center;
-
-                        Text {
-                            text: dev.device_type == "speaker" ? "🔊" : (dev.device_type == "tv" ? "📺" : (dev.device_type == "smartphone" ? "📱" : "💻"));
-                            font-size: 18px;
-                            vertical-alignment: center;
-                        }
-
-                        VerticalLayout {
-                            horizontal-stretch: 1;
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            spacing: 14px;
                             alignment: center;
-                            spacing: 2px;
 
                             Text {
-                                text: dev.name;
-                                color: dev.is_active ? Theme.accent : Theme.text-primary;
-                                font-size: 14px;
-                                font-weight: dev.is_active ? 700 : 500;
-                                overflow: elide;
+                                text: dev.device_type == "speaker" ? "🔊" : (dev.device_type == "tv" ? "📺" : (dev.device_type == "smartphone" ? "📱" : "💻"));
+                                font-size: 18px;
+                                vertical-alignment: center;
                             }
 
-                            if dev.is_active : Text {
-                                text: "Spotify Connect • Воспроизведение здесь";
-                                color: Theme.accent;
-                                font-size: 11px;
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                alignment: center;
+                                spacing: 2px;
+
+                                Text {
+                                    text: dev.name;
+                                    color: dev.is_active ? Theme.accent : Theme.text-primary;
+                                    font-size: 14px;
+                                    font-weight: dev.is_active ? 700 : 500;
+                                    overflow: elide;
+                                }
+
+                                if dev.is_active : Text {
+                                    text: "Spotify Connect • Воспроизведение здесь";
+                                    color: Theme.accent;
+                                    font-size: 11px;
+                                }
                             }
                         }
-                    }
 
-                    dev_touch := TouchArea {
-                        clicked => { root.select_device(dev.id); }
+                        dev_touch := TouchArea {
+                            clicked => { root.select_device(dev.id); }
+                        }
                     }
                 }
             }

@@ -128,14 +128,12 @@ export component AppWindow inherits Window {
                 clip: true;
 
                 // View 1: Karaoke / Lyrics (on top when active)
-                LyricsView {
-                    visible: root.is_lyrics_open;
+                if root.is_lyrics_open : LyricsView {
                     close_lyrics => { root.is_lyrics_open = false; }
                 }
 
-                // View 2: Home Catalog (state preserved on navigation)
-                HomeView {
-                    visible: !root.is_lyrics_open && root.current_workspace == 0;
+                // View 2: Home Catalog (matching 5.png)
+                if !root.is_lyrics_open && root.current_workspace == 0 : HomeView {
                     is_authenticated: root.is_authenticated;
                     playlists: root.user_playlists;
                     open_album(id) => {
@@ -145,9 +143,8 @@ export component AppWindow inherits Window {
                     login_clicked => { root.is_login_open = true; }
                 }
 
-                // View 3: Album / Playlist View
-                AlbumView {
-                    visible: !root.is_lyrics_open && root.current_workspace == 1;
+                // View 3: Album / Playlist View (matching 7.png / 8.png)
+                if !root.is_lyrics_open && root.current_workspace == 1 : AlbumView {
                     album_title: root.current_album_title;
                     tracks: root.current_tracks;
                     play_all => {
@@ -159,8 +156,7 @@ export component AppWindow inherits Window {
                 }
 
                 // View 4: Browse / Обзор View (matching 6.png)
-                BrowseView {
-                    visible: !root.is_lyrics_open && root.current_workspace == 2;
+                if !root.is_lyrics_open && root.current_workspace == 2 : BrowseView {
                     category_clicked(name) => {
                         root.search_query(name);
                     }

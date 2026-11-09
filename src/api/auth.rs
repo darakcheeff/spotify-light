@@ -718,7 +718,48 @@ impl SpotifyApiClient {
     }
 
     pub async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<SimpleTrack>, String> {
-        info!("[API] Fetching album tracks for '{}'...", album_id);
+        info!("[API] Fetching album tracks for '{}' via spclient...", album_id);
+        let sp_url = format!("https://spclient.wg.spotify.com/album-entity-view/v2/album/{}", album_id);
+        if let Ok(res) = self.client.get(&sp_url)
+            .bearer_auth(&self.access_token)
+            .header("Accept", "application/json")
+            .send()
+            .await 
+        {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    let album_title = json.get("title").and_then(|t| t.as_str()).unwrap_or("Альбом").to_string();
+                    if let Some(body) = json.get("body").and_then(|b| b.as_array()) {
+                        let mut list = Vec::new();
+                        let mut idx = 1;
+                        for b in body {
+                            let meta = b.get("metadata");
+                            let uri = meta.and_then(|m| m.get("uri")).and_then(|u| u.as_str()).unwrap_or_default();
+                            if let Some(tid) = uri.strip_prefix("spotify:track:") {
+                                let title = b.get("text").and_then(|t| t.get("title")).and_then(|s| s.as_str()).unwrap_or("Трек").to_string();
+                                let artist = b.get("text").and_then(|t| t.get("subtitle")).and_then(|s| s.as_str()).unwrap_or("Исполнитель").to_string();
+
+                                list.push(SimpleTrack {
+                                    id: tid.to_string(),
+                                    index: idx,
+                                    title,
+                                    artist,
+                                    album: album_title.clone(),
+                                    duration_str: "3:30".to_string(),
+                                });
+                                idx += 1;
+                            }
+                        }
+                        if !list.is_empty() {
+                            info!("[API SUCCESS] Retrieved {} tracks via spclient for album '{}'", list.len(), album_id);
+                            return Ok(list);
+                        }
+                    }
+                }
+            }
+        }
+
+        info!("[API] Falling back to Web API for album tracks: {}", album_id);
         let url = format!("https://api.spotify.com/v1/albums/{}/tracks?limit=50", album_id);
         match self.send_with_retry(&url).await {
             Ok(json) => {
@@ -758,7 +799,48 @@ impl SpotifyApiClient {
     }
 
     pub async fn get_artist_top_tracks(&self, artist_id: &str) -> Result<Vec<SimpleTrack>, String> {
-        info!("[API] Fetching top tracks for artist '{}'...", artist_id);
+        info!("[API] Fetching top tracks for artist '{}' via spclient...", artist_id);
+        let sp_url = format!("https://spclient.wg.spotify.com/artistview/v1/artist/{}", artist_id);
+        if let Ok(res) = self.client.get(&sp_url)
+            .bearer_auth(&self.access_token)
+            .header("Accept", "application/json")
+            .send()
+            .await 
+        {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    let artist_name = json.get("title").and_then(|t| t.as_str()).unwrap_or("Исполнитель").to_string();
+                    if let Some(body) = json.get("body").and_then(|b| b.as_array()) {
+                        let mut list = Vec::new();
+                        let mut idx = 1;
+                        for b in body {
+                            let meta = b.get("metadata");
+                            let uri = meta.and_then(|m| m.get("uri")).and_then(|u| u.as_str()).unwrap_or_default();
+                            if let Some(tid) = uri.strip_prefix("spotify:track:") {
+                                let title = b.get("text").and_then(|t| t.get("title")).and_then(|s| s.as_str()).unwrap_or("Трек").to_string();
+                                let playcount = b.get("text").and_then(|t| t.get("subtitle")).and_then(|s| s.as_str()).unwrap_or_default().to_string();
+
+                                list.push(SimpleTrack {
+                                    id: tid.to_string(),
+                                    index: idx,
+                                    title,
+                                    artist: artist_name.clone(),
+                                    album: playcount,
+                                    duration_str: "3:30".to_string(),
+                                });
+                                idx += 1;
+                            }
+                        }
+                        if !list.is_empty() {
+                            info!("[API SUCCESS] Retrieved {} top tracks via spclient for artist '{}'", list.len(), artist_id);
+                            return Ok(list);
+                        }
+                    }
+                }
+            }
+        }
+
+        info!("[API] Falling back to Web API for artist top tracks: {}", artist_id);
         let url = format!("https://api.spotify.com/v1/artists/{}/top-tracks?market=from_token", artist_id);
         match self.send_with_retry(&url).await {
             Ok(json) => {

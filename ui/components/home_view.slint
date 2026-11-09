@@ -126,11 +126,11 @@ export component HomeView inherits Rectangle {
 
                     for col_idx in 4 : Rectangle {
                         property <int> p_idx: row_idx * 4 + col_idx;
-                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false };
+                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false, item_type: 0 };
                         property <bool> is_valid: pl.id != "";
-                        property <bool> is_liked_folder: pl.title.contains("Любимые") || pl.title.contains("Liked");
-                        property <bool> is_killshot: pl.title.contains("Killshot");
-                        property <bool> is_offline: pl.title.contains("Оффлайн");
+                        property <bool> is_liked_folder: pl.item_type == 3;
+                        property <bool> is_killshot: pl.item_type == 4;
+                        property <bool> is_offline: pl.item_type == 1;
 
                         horizontal-stretch: 1;
                         height: 58px;
@@ -334,9 +334,9 @@ export component HomeView inherits Rectangle {
 
                     for idx in 4 : Rectangle {
                         property <int> p_idx: idx + 4;
-                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false };
+                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false, item_type: 0 };
                         property <bool> is_valid: pl.id != "";
-                        property <bool> is_liked: pl.title.contains("Любимые");
+                        property <bool> is_liked: pl.item_type == 3;
 
                         horizontal-stretch: 1;
                         height: 250px;
@@ -365,7 +365,7 @@ export component HomeView inherits Rectangle {
                                 }
 
                                 // Radio badge if it's a radio playlist
-                                if pl.title.contains("радио") || pl.title.contains("Radio") : Rectangle {
+                                if pl.item_type == 4 : Rectangle {
                                     x: parent.width - 56px;
                                     y: 8px;
                                     width: 48px;

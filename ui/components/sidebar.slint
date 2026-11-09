@@ -121,9 +121,9 @@ export component Sidebar inherits Rectangle {
 
                 for item in root.playlists : Rectangle {
                     property <bool> matches_filter: root.selected_filter == 0 
-                        || (root.selected_filter == 1 && !item.subtitle.contains("Исполнитель") && !item.subtitle.contains("Альбом"))
-                        || (root.selected_filter == 2 && item.subtitle.contains("Альбом"))
-                        || (root.selected_filter == 3 && item.subtitle.contains("Исполнитель"));
+                        || (root.selected_filter == 1 && (item.item_type == 0 || item.item_type == 3 || item.item_type == 4))
+                        || (root.selected_filter == 2 && item.item_type == 1)
+                        || (root.selected_filter == 3 && item.item_type == 2);
 
                     height: matches_filter ? 56px : 0px;
                     visible: matches_filter;

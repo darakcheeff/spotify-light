@@ -316,12 +316,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 match client.get_playlists().await {
                                     Ok(playlists) => {
                                         let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                            let item_type = if p.title.contains("Любимые") || p.title.contains("Liked") {
+                                                3
+                                            } else if p.title.contains("радио") || p.title.contains("Radio") || p.title.contains("Killshot") {
+                                                4
+                                            } else if p.title.contains("Альбом") {
+                                                1
+                                            } else {
+                                                0
+                                            };
                                             PlaylistItem {
                                                 id: p.id.into(),
                                                 title: p.title.into(),
                                                 subtitle: format!("Плейлист • {} треков", p.track_count).into(),
                                                 is_pinned: false,
                                                 is_active: false,
+                                                item_type,
                                             }
                                         }).collect();
 
@@ -437,12 +447,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             match client.get_playlists().await {
                                 Ok(playlists) => {
                                     let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                        let item_type = if p.title.contains("Любимые") || p.title.contains("Liked") {
+                                            3
+                                        } else if p.title.contains("радио") || p.title.contains("Radio") || p.title.contains("Killshot") {
+                                            4
+                                        } else if p.title.contains("Альбом") {
+                                            1
+                                        } else {
+                                            0
+                                        };
                                         PlaylistItem {
                                             id: p.id.into(),
                                             title: p.title.into(),
                                             subtitle: format!("Плейлист • {} треков", p.track_count).into(),
                                             is_pinned: false,
                                             is_active: false,
+                                            item_type,
                                         }
                                     }).collect();
 
@@ -587,12 +607,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             match client.get_playlists().await {
                                 Ok(playlists) => {
                                     let slint_playlists: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                                        let item_type = if p.title.contains("Любимые") || p.title.contains("Liked") {
+                                            3
+                                        } else if p.title.contains("радио") || p.title.contains("Radio") || p.title.contains("Killshot") {
+                                            4
+                                        } else if p.title.contains("Альбом") {
+                                            1
+                                        } else {
+                                            0
+                                        };
                                         PlaylistItem {
                                             id: p.id.into(),
                                             title: p.title.into(),
                                             subtitle: format!("Плейлист • {} треков", p.track_count).into(),
                                             is_pinned: false,
                                             is_active: false,
+                                            item_type,
                                         }
                                     }).collect();
 

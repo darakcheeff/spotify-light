@@ -133,7 +133,8 @@ export component HomeView inherits Rectangle {
                         property <bool> is_killshot: pl.item_type == 4;
                         property <bool> is_offline: pl.item_type == 1;
 
-                        width: (parent.width - 36px) / 4;
+                        horizontal-stretch: 1;
+                        min-width: 0px;
                         height: 58px;
                         border-radius: 4px;
                         background: card_touch.has-hover ? #383838 : #282828;
@@ -341,7 +342,8 @@ export component HomeView inherits Rectangle {
                         property <bool> is_valid: pl.id != "";
                         property <bool> is_liked: pl.item_type == 3;
 
-                        width: (parent.width - 48px) / 4;
+                        horizontal-stretch: 1;
+                        min-width: 0px;
                         height: 250px;
                         border-radius: Theme.radius-medium;
                         background: rec_touch.has-hover ? #242424 : #181818;

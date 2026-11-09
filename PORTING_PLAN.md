@@ -178,17 +178,42 @@
 
 ---
 
-## 3. Аудио-подсистема: Чистый Native PulseAudio/PipeWire стриминг
+## 3. Аудио-подсистема: Архитектурный анализ Kinrox и варианты для Linux
 
-1. **Исключение конфликтов ALSA:**
-   - Использование `pulseaudio-backend` в `librespot`.
-   - Автоматическое связывание с `pipewire-pulse` на современных Linux-системах без монополизации аудио-устройства.
-2. **Декодер потока:**
-   - Прямой Ogg Vorbis декодер (320 kbps High Quality) через `librespot-playback`.
-   - Устранение ошибки `invalid mpeg audio header` и `Symphonia end of stream`.
-3. **События плеера:**
-   - Отправка реального прогресса (`position_ms`) в Slint каждые 250 мс.
-   - Обработка `EndOfTrack` с автоматическим взятием следующего трека из `Queue`.
+### 3.1. Как устроен звук и дешифрование в Kinrox (https://github.com/awaik/Kinrox)
+При прямом исследовании кодовой базы Kinrox вскрылась следующая архитектура:
+1. **Режим 1: Spotify Connect (`SpotifyConnectMusicEngine.swift`) — базовый режим Kinrox:**
+   * Аудиопоток не декодируется самописным кодом. Дословно из исходников Kinrox:  
+     `"Audio stays in Spotify. The complete occurrence timeline is mirrored into our private helper."`
+   * Kinrox выступает сверхбыстрым нативным контроллером (Swift + SQLite кэш), управляющим воспроизведением через Spotify Web API (`PUT /v1/me/player/play`, пауза, громкость, очередь), при этом статус-бар, таймлайн и обложки отрисовываются нативно локально.
+2. **Режим 2: Soloist (`SoloistMusicEngine.swift` / `SoloistInstaller.swift`) — режим с v0.5.0:**
+   * Для автономного воспроизведения без запущенного официального приложения Kinrox скачивает официальный проприетарный бинарный демон **Soloist** (`com.spotify.soloist`) с закрытых серверов Spotify (`https://soloist-builds.spotifycdn.com/soloist_release_osx_arm64.tar.gz`), подписанный приватным сертификатом Apple команды Spotify (`2FNC3A47ZF`).
+   * Soloist запускается как дочерний процесс и общается с клиентом через локальный Unix-сокет. Так как этот бинарник создан самой Spotify, он обладает приватными ключами и легитимным DRM-рукопожатием, что исключает ошибку `AesKeyError 0 1`.
+   * **Ограничение:** Spotify выпускает Soloist исключительно для macOS (Apple Silicon ARM64) и требует персональный ключ из Spotify Developer Dashboard (`developer.spotify.com/dashboard/soloist`). Под Linux готового бинарника Soloist на CDN нет (HTTP 404).
+
+---
+
+### 3.2. Варианты реализации звука для Linux в SpotifyLight
+
+1. **Вариант А: Режим Spotify Connect (Архитектура Kinrox до v0.5.0)**
+   * Самый надежный и 100% стабильный способ работы со Spotify без нарушения DRM и бана аккаунтов.
+   * Приложение работает как полноценный плеер со своим интерфейсом, локальным кэшем, очередью и регулятором громкости, отправляя команды воспроизведения на выбранное устройство Spotify Connect (телефон, умная колонка, либо фоновый официальный демон).
+   * Таймлайн, прогресс и состояние воспроизведения зеркалируются в Slint UI в реальном времени.
+
+2. **Вариант Б: Фоновый Spotify Connect Receiver (`Spirc` через Librespot)**
+   * Клиент регистрирует себя в локальной сети как официальный Spotify Connect Receiver («SpotifyLight Player»).
+   * При передаче потока на себя через протокол Connect дешифрование обрабатывается по протоколу Connect Session, что на поддерживаемых профилях позволяет выводить звук напрямую в PulseAudio/PipeWire.
+
+3. **Вариант В: Headless Spotify Web Playback SDK Runner**
+   * Запуск легковесного headless-демона (без оконного WebView и тяжелого Electron) с официальным `https://sdk.scdn.co/spotify-player.js`.
+   * Web Playback SDK получает официальные Widevine-ключи от серверов Spotify и транслирует PCM-звук в PulseAudio. Полностью легитимно, работает для всех аккаунтов.
+
+---
+
+### 3.3. Исправление загрузки обложек (Image Pipeline)
+- Внедрение асинхронного сервиса загрузки обложек по URL (`i.scdn.co`) с дисковым кэшем в `~/.cache/spotify-light/covers/`.
+- Замена всех пустых квадратов с нотами `♪` в `album_view.slint`, `sidebar.slint`, `player_bar.slint` и `right_drawer.slint` на компонент `Image { source: ... }`.
+- Отображение реальных названий плейлистов и авторов вместо сырых ID-хешей.
 
 ---
 

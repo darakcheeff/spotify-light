@@ -258,8 +258,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if !track.duration_str.is_empty() {
                                 ui.set_total_time(track.duration_str.clone());
                                 let d_secs = parse_duration_to_secs(&track.duration_str);
-                                let d_clone = p_dur.clone();
-                                tokio::spawn(async move { *d_clone.lock().await = d_secs; });
+                                tokio::spawn(async move { *dur_clone.lock().await = d_secs; });
                             }
                         }
                     }
@@ -312,8 +311,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if !track.duration_str.is_empty() {
                                 ui.set_total_time(track.duration_str.clone());
                                 let d_secs = parse_duration_to_secs(&track.duration_str);
-                                let d_clone = p_dur.clone();
-                                tokio::spawn(async move { *d_clone.lock().await = d_secs; });
+                                tokio::spawn(async move { *dur_clone.lock().await = d_secs; });
                             }
                         }
                     }
@@ -634,8 +632,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         if !track.duration_str.is_empty() {
                                             ui.set_total_time(track.duration_str.clone());
                                             let d_secs = parse_duration_to_secs(&track.duration_str);
-                                            let d_clone = p_dur.clone();
-                                            tokio::spawn(async move { *d_clone.lock().await = d_secs; });
+                                            tokio::spawn(async move { *dur_clone.lock().await = d_secs; });
                                         }
                                     }
                                 } else {

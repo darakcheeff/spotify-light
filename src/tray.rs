@@ -1,4 +1,5 @@
-use tracing::{error, info};
+use slint::ComponentHandle;
+use tracing::{error, info, warn};
 use zbus::{connection::Builder, interface};
 
 pub struct TrayService {
@@ -108,7 +109,8 @@ pub async fn start_tray(window_handle: slint::Weak<crate::AppWindow>) -> Result<
     ).await;
 
     if let Ok(proxy) = watcher_proxy {
-        match proxy.call::<(&str,), ()>("RegisterStatusNotifierItem", &(service_name.as_str(),)).await {
+        let res: Result<(), _> = proxy.call("RegisterStatusNotifierItem", &service_name).await;
+        match res {
             Ok(_) => info!("[TRAY SUCCESS] Successfully registered StatusNotifierItem with desktop watcher!"),
             Err(e) => info!("[TRAY] Note: desktop watcher response: {}", e),
         }

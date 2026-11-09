@@ -249,7 +249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut guard = api_client_lock.lock().await;
                     *guard = None;
                 }
-                engine.send_command(AudioCommand::Stop).await;
+                engine.send_command(AudioCommand::Pause).await;
                 let _ = app_weak.upgrade_in_event_loop(|ui| {
                     ui.set_is_authenticated(false);
                     ui.set_user_display_name("".into());

@@ -1,0 +1,191 @@
+import { Theme } from "../theme.slint";
+
+export component ProfileMenu inherits Rectangle {
+    background: transparent;
+
+    callback close_menu();
+    callback open_settings();
+    callback logout();
+
+    // Full-window transparent backdrop: clicking outside closes the menu
+    TouchArea {
+        clicked => {
+            root.close_menu();
+        }
+    }
+
+    // Floating menu box aligned under the profile avatar
+    Rectangle {
+        x: parent.width - self.width - 24px;
+        y: 60px;
+        width: 196px;
+        height: 242px;
+        border-radius: 8px;
+        background: #282828;
+        border-width: 1px;
+        border-color: #383838;
+
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
+
+            // 1. Аккаунт ↗
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i1.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Аккаунт";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "↗";
+                        color: #b3b3b3;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
+                }
+                i1 := TouchArea {
+                    clicked => { root.close_menu(); }
+                }
+            }
+
+            // 2. Профиль
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i2.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Профиль";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i2 := TouchArea {
+                    clicked => { root.close_menu(); }
+                }
+            }
+
+            // 3. Недавнее
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i3.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Недавнее";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i3 := TouchArea {
+                    clicked => { root.close_menu(); }
+                }
+            }
+
+            // 4. Справка ↗
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i4.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Справка";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "↗";
+                        color: #b3b3b3;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
+                }
+                i4 := TouchArea {
+                    clicked => { root.close_menu(); }
+                }
+            }
+
+            // 5. Настройки
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i5.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Настройки";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i5 := TouchArea {
+                    clicked => {
+                        root.close_menu();
+                        root.open_settings();
+                    }
+                }
+            }
+
+            // Separator line
+            Rectangle {
+                height: 1px;
+                background: #3e3e3e;
+            }
+
+            // 6. Выйти
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i6.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Выйти";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i6 := TouchArea {
+                    clicked => {
+                        root.close_menu();
+                        root.logout();
+                    }
+                }
+            }
+        }
+    }
+}

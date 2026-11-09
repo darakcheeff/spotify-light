@@ -7,6 +7,7 @@ import { HomeView } from "components/home_view.slint";
 import { AlbumView } from "components/album_view.slint";
 import { BrowseView } from "components/browse_view.slint";
 import { SettingsView } from "components/settings_view.slint";
+import { ProfileMenu } from "components/profile_menu.slint";
 import { LyricsView } from "components/lyrics_view.slint";
 import { LoginDialog } from "components/login_dialog.slint";
 
@@ -31,6 +32,7 @@ export component AppWindow inherits Window {
     in-out property <bool> is_drawer_open: false;
     in-out property <int> drawer_mode: 0; // 0: Queue, 1: Connect Devices
     in-out property <bool> is_login_open: false;
+    in-out property <bool> is_profile_menu_open: false;
 
     // Real dynamic collections
     in-out property <[PlaylistItem]> user_playlists: [];
@@ -91,20 +93,15 @@ export component AppWindow inherits Window {
                 root.current_workspace = 2;
                 root.is_lyrics_open = false;
             }
-            open_settings => {
-                root.current_workspace = 3;
-                root.is_lyrics_open = false;
-            }
             search_changed(query) => {
                 root.search_query(query);
             }
             profile_clicked => {
-                if !root.is_authenticated {
+                if root.is_authenticated {
+                    root.is_profile_menu_open = !root.is_profile_menu_open;
+                } else {
                     root.is_login_open = true;
                 }
-            }
-            logout_clicked => {
-                root.logout_requested();
             }
         }
 
@@ -250,5 +247,19 @@ export component AppWindow inherits Window {
         submit_password(email, pwd) => { root.login_requested(email, pwd); }
         submit_otp(email, code) => { root.otp_submitted(email, code); }
         login_via_browser => { root.browser_login_requested(); }
+    }
+
+    // Profile Popup Menu Overlay (matching 9.png)
+    if root.is_profile_menu_open : ProfileMenu {
+        close_menu => { root.is_profile_menu_open = false; }
+        open_settings => {
+            root.is_profile_menu_open = false;
+            root.current_workspace = 3;
+            root.is_lyrics_open = false;
+        }
+        logout => {
+            root.is_profile_menu_open = false;
+            root.logout_requested();
+        }
     }
 }

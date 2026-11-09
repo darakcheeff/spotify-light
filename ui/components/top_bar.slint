@@ -9,16 +9,12 @@ export component TopBar inherits Rectangle {
     in-out property <string> user_name: "";
     in-out property <string> user_initial: "L";
     in-out property <bool> is_home_active: true;
-    in-out property <bool> is_menu_open: false;
-    
     callback nav_back();
     callback nav_forward();
     callback nav_home();
     callback open_browse();
-    callback open_settings();
     callback search_changed(string);
     callback profile_clicked();
-    callback logout_clicked();
     callback notifications_clicked();
 
     HorizontalLayout {
@@ -248,7 +244,6 @@ export component TopBar inherits Rectangle {
 
                 avatar_touch := TouchArea {
                     clicked => {
-                        root.is_menu_open = !root.is_menu_open;
                         root.profile_clicked();
                     }
                 }
@@ -272,174 +267,6 @@ export component TopBar inherits Rectangle {
 
                 login_btn_touch := TouchArea {
                     clicked => { root.profile_clicked(); }
-                }
-            }
-        }
-    }
-
-    // Floating Profile Dropdown Menu (matching 9.png)
-    if root.is_menu_open : Rectangle {
-        x: parent.width - self.width - 20px;
-        y: 60px;
-        width: 196px;
-        height: 248px;
-        border-radius: 8px;
-        background: #282828;
-        border-width: 1px;
-        border-color: #383838;
-        z: 100;
-
-        VerticalLayout {
-            padding: 4px;
-            spacing: 2px;
-
-            // 1. Аккаунт ↗
-            Rectangle {
-                height: 32px;
-                border-radius: 4px;
-                background: i1.has-hover ? #3e3e3e : transparent;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    alignment: center;
-                    Text {
-                        text: "Аккаунт";
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 500;
-                        horizontal-stretch: 1;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: "↗";
-                        color: #b3b3b3;
-                        font-size: 13px;
-                        vertical-alignment: center;
-                    }
-                }
-                i1 := TouchArea { clicked => { root.is_menu_open = false; } }
-            }
-
-            // 2. Профиль
-            Rectangle {
-                height: 32px;
-                border-radius: 4px;
-                background: i2.has-hover ? #3e3e3e : transparent;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    alignment: center;
-                    Text {
-                        text: "Профиль";
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 500;
-                        vertical-alignment: center;
-                    }
-                }
-                i2 := TouchArea { clicked => { root.is_menu_open = false; } }
-            }
-
-            // 3. Недавнее
-            Rectangle {
-                height: 32px;
-                border-radius: 4px;
-                background: i3.has-hover ? #3e3e3e : transparent;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    alignment: center;
-                    Text {
-                        text: "Недавнее";
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 500;
-                        vertical-alignment: center;
-                    }
-                }
-                i3 := TouchArea { clicked => { root.is_menu_open = false; } }
-            }
-
-            // 4. Справка ↗
-            Rectangle {
-                height: 32px;
-                border-radius: 4px;
-                background: i4.has-hover ? #3e3e3e : transparent;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    alignment: center;
-                    Text {
-                        text: "Справка";
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 500;
-                        horizontal-stretch: 1;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: "↗";
-                        color: #b3b3b3;
-                        font-size: 13px;
-                        vertical-alignment: center;
-                    }
-                }
-                i4 := TouchArea { clicked => { root.is_menu_open = false; } }
-            }
-
-            // 5. Настройки
-            Rectangle {
-                height: 32px;
-                border-radius: 4px;
-                background: i5.has-hover ? #3e3e3e : transparent;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    alignment: center;
-                    Text {
-                        text: "Настройки";
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 500;
-                        vertical-alignment: center;
-                    }
-                }
-                i5 := TouchArea {
-                    clicked => {
-                        root.is_menu_open = false;
-                        root.open_settings();
-                    }
-                }
-            }
-
-            // Separator line
-            Rectangle {
-                height: 1px;
-                background: #3e3e3e;
-            }
-
-            // 6. Выйти
-            Rectangle {
-                height: 32px;
-                border-radius: 4px;
-                background: i6.has-hover ? #3e3e3e : transparent;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    alignment: center;
-                    Text {
-                        text: "Выйти";
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 500;
-                        vertical-alignment: center;
-                    }
-                }
-                i6 := TouchArea {
-                    clicked => {
-                        root.is_menu_open = false;
-                        root.logout_clicked();
-                    }
                 }
             }
         }

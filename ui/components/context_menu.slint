@@ -33,7 +33,7 @@ export component ContextMenu inherits Rectangle {
     // Floating Popup Box
     menu_box := Rectangle {
         width: 320px;
-        height: root.menu_type == 0 ? 568px : (root.menu_type == 1 ? 468px : (root.menu_type == 2 ? 258px : 216px));
+        height: root.menu_type == 0 ? 530px : (root.menu_type == 1 ? 438px : (root.menu_type == 2 ? 220px : 180px));
         
         // Exact position clamping: never overflows right or bottom (stays above player bar)
         x: Math.min(Math.max(12px, root.menu_x), parent.width - self.width - 16px);
@@ -264,7 +264,7 @@ export component ContextMenu inherits Rectangle {
                 // 1. Добавить в плейлист ▸
                 Rectangle {
                     height: 38px; border-radius: 4px;
-                    background: it_t1.has-hover ? #3e3e3e : transparent;
+                    background: (it_t1.has-hover || root.is_submenu_open) ? #3e3e3e : transparent;
                     HorizontalLayout {
                         padding-left: 14px; padding-right: 14px; spacing: 14px;
                         Text { width: 20px; text: "+"; color: #b3b3b3; font-size: 17px; vertical-alignment: center; }
@@ -272,8 +272,11 @@ export component ContextMenu inherits Rectangle {
                         Text { text: "▸"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
                     }
                     it_t1 := TouchArea {
+                        pointer-event(event) => {
+                            root.is_submenu_open = true;
+                        }
                         clicked => {
-                            root.is_submenu_open = !root.is_submenu_open;
+                            root.is_submenu_open = true;
                         }
                     }
                 }
@@ -631,12 +634,12 @@ export component ContextMenu inherits Rectangle {
 
     // Cascading Submenu Box ("Добавить в плейлист ▸" matching official Spotify UI)
     if root.is_submenu_open : submenu_box := Rectangle {
-        width: 260px;
-        height: 320px;
+        width: 274px;
+        height: 380px;
         x: (menu_box.x + menu_box.width + self.width > parent.width - 16px)
             ? Math.max(12px, menu_box.x - self.width - 4px)
             : (menu_box.x + menu_box.width + 4px);
-        y: menu_box.y;
+        y: Math.min(menu_box.y, parent.height - self.height - 76px);
         background: #282828;
         border-radius: 4px;
         border-width: 1px;

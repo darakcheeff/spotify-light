@@ -579,6 +579,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    app.on_open_external_link(|url| {
+        let u = url.to_string();
+        info!("[UI ACTION] Open external URL: {}", u);
+        let _ = std::process::Command::new("xdg-open").arg(&u).spawn();
+    });
+
     // Context Menu Action: Delete Playlist
     app.on_delete_playlist({
         let api_client_lock = Arc::clone(&active_api_client);

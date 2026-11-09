@@ -108,6 +108,29 @@ impl AudioEngine {
     pub async fn init_session(&self, session: Session) {
         info!("[AUDIO] Connecting native playback engine to Spotify AP session...");
         if let Some(player) = create_player(session.clone(), Arc::clone(&self.volume)) {
+            let mut event_channel = player.get_player_event_channel();
+            let p_clone = Arc::clone(&player);
+            tokio::spawn(async move {
+                while let Some(event) = event_channel.recv().await {
+                    match event {
+                        librespot::playback::player::PlayerEvent::Playing { track_id, .. } => {
+                            info!("[AUDIO EVENT] Playing track: {:?}", track_id);
+                        }
+                        librespot::playback::player::PlayerEvent::Paused { track_id, .. } => {
+                            info!("[AUDIO EVENT] Paused track: {:?}", track_id);
+                        }
+                        librespot::playback::player::PlayerEvent::Stopped { track_id, .. } => {
+                            info!("[AUDIO EVENT] Stopped track: {:?}", track_id);
+                        }
+                        librespot::playback::player::PlayerEvent::Unavailable { track_id, .. } => {
+                            warn!("[AUDIO EVENT] Track {:?} is unavailable or restricted by DRM; halting to prevent skip loop.", track_id);
+                            p_clone.stop();
+                        }
+                        _ => {}
+                    }
+                }
+            });
+
             let mut p_guard = self.player.lock().await;
             *p_guard = Some(player);
 

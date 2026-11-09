@@ -32,6 +32,7 @@ export component AppWindow inherits Window {
     in-out property <bool> is_lyrics_open: false;
     in-out property <bool> is_drawer_open: false;
     in-out property <int> drawer_mode: 0; // 0: Queue, 1: Connect Devices
+    in-out property <int> drawer_queue_tab: 0; // 0: Queue, 1: Recent
     in-out property <bool> is_login_open: false;
     in-out property <bool> is_profile_menu_open: false;
     in-out property <bool> is_context_menu_open: false;
@@ -85,6 +86,7 @@ export component AppWindow inherits Window {
     callback delete_playlist(string);
     callback create_new_playlist();
     callback add_track_to_playlist(string, string);
+    callback open_external_link(string);
 
     VerticalLayout {
         padding: 0px;
@@ -229,6 +231,7 @@ export component AppWindow inherits Window {
             // Right Drawer (Queue / Recently Played / Connect Devices)
             if root.is_drawer_open : RightDrawer {
                 mode: root.drawer_mode;
+                queue_tab <=> root.drawer_queue_tab;
                 devices: root.discovered_devices;
                 queue_items: root.current_tracks;
                 recent_items: root.recent_items;
@@ -311,6 +314,16 @@ export component AppWindow inherits Window {
         logout => {
             root.is_profile_menu_open = false;
             root.logout_requested();
+        }
+        open_external_url(url) => {
+            root.is_profile_menu_open = false;
+            root.open_external_link(url);
+        }
+        open_recents => {
+            root.is_profile_menu_open = false;
+            root.is_drawer_open = true;
+            root.drawer_mode = 0;
+            root.drawer_queue_tab = 1;
         }
     }
 

@@ -6,6 +6,8 @@ export component ProfileMenu inherits Rectangle {
     callback close_menu();
     callback open_settings();
     callback logout();
+    callback open_external_url(string);
+    callback open_recents();
 
     // Full-window transparent backdrop: clicking outside closes the menu
     TouchArea {
@@ -53,7 +55,10 @@ export component ProfileMenu inherits Rectangle {
                     }
                 }
                 i1 := TouchArea {
-                    clicked => { root.close_menu(); }
+                    clicked => {
+                        root.close_menu();
+                        root.open_external_url("https://www.spotify.com/account/overview/");
+                    }
                 }
             }
 
@@ -95,7 +100,10 @@ export component ProfileMenu inherits Rectangle {
                     }
                 }
                 i3 := TouchArea {
-                    clicked => { root.close_menu(); }
+                    clicked => {
+                        root.close_menu();
+                        root.open_recents();
+                    }
                 }
             }
 
@@ -123,7 +131,10 @@ export component ProfileMenu inherits Rectangle {
                     }
                 }
                 i4 := TouchArea {
-                    clicked => { root.close_menu(); }
+                    clicked => {
+                        root.close_menu();
+                        root.open_external_url("https://support.spotify.com/");
+                    }
                 }
             }
 

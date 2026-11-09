@@ -1122,6 +1122,45 @@ impl SpotifyApiClient {
             Err(format!("Error deleting playlist: {}", res.status()))
         }
     }
+
+    pub async fn get_devices(&self) -> Result<Vec<(String, String, String, bool)>, String> {
+        let url = "https://api.spotify.com/v1/me/player/devices";
+        let json = self.send_with_retry(url).await?;
+        let mut devices = Vec::new();
+        if let Some(items) = json.get("devices").and_then(|d| d.as_array()) {
+            for item in items {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("Устройство").to_string();
+                let d_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("Speaker").to_string();
+                let is_active = item.get("is_active").and_then(|v| v.as_bool()).unwrap_or(false);
+                devices.push((id, name, d_type, is_active));
+            }
+        }
+        Ok(devices)
+    }
+
+    pub async fn play_uri_on_device(&self, uri: &str, device_id: Option<&str>) -> Result<(), String> {
+        let mut url = "https://api.spotify.com/v1/me/player/play".to_string();
+        if let Some(did) = device_id {
+            url.push_str(&format!("?device_id={}", did));
+        }
+        let body = serde_json::json!({
+            "uris": [uri]
+        });
+        let res = self.client.put(&url)
+            .bearer_auth(&self.access_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+        if res.status().is_success() {
+            info!("[API SUCCESS] Playback started on Spotify device");
+            Ok(())
+        } else {
+            let err = res.text().await.unwrap_or_default();
+            Err(format!("Error starting device playback: {}", err))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

@@ -114,7 +114,7 @@ export component Sidebar inherits Rectangle {
             VerticalLayout {
                 spacing: 4px;
 
-                for item in root.playlists : Rectangle {
+                for item[idx] in root.playlists : Rectangle {
                     height: 56px;
                     border-radius: Theme.radius-small;
                     background: item.is_active ? Theme.background-elevated : (item_touch.has-hover ? Theme.background-hover : transparent);
@@ -171,6 +171,11 @@ export component Sidebar inherits Rectangle {
 
                     item_touch := TouchArea {
                         clicked => { root.playlist_selected(item.id); }
+                        pointer-event(event) => {
+                            if event.button == PointerEventButton.right && event.kind == PointerEventKind.up {
+                                root.playlist_context_menu(item.id, 260px, Math.min(Math.max(60px, idx * 60px + 100px), 600px));
+                            }
+                        }
                     }
                 }
             }

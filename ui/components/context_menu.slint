@@ -1,0 +1,499 @@
+import { Theme } from "../theme.slint";
+
+export component ContextMenu inherits Rectangle {
+    background: transparent;
+
+    in property <int> menu_type: 0; // 0: Playlist, 1: Track, 2: Album, 3: Artist
+    in property <string> target_id: "";
+    in property <string> target_title: "";
+    in property <bool> is_liked: false;
+    in property <length> menu_x: 200px;
+    in property <length> menu_y: 150px;
+
+    callback close();
+    callback add_to_queue(string);
+    callback like_toggle(string);
+    callback copy_link(string, int);
+    callback delete_playlist(string);
+    callback create_playlist();
+    callback go_to_artist(string);
+    callback go_to_album(string);
+
+    // Full-screen backdrop to dismiss menu on outside click
+    TouchArea {
+        clicked => { root.close(); }
+        pointer-event(event) => {
+            // Right clicking outside also dismisses
+            if event.kind == PointerEventKind.down {
+                root.close();
+            }
+        }
+    }
+
+    // Floating Popup Box
+    menu_box := Rectangle {
+        // Clamp coordinates within window bounds
+        x: Math.min(Math.max(8px, root.menu_x), parent.width - self.width - 12px);
+        y: Math.min(Math.max(8px, root.menu_y), parent.height - self.height - 80px);
+        width: 230px;
+        background: #282828;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: #383838;
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #000000aa;
+
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
+
+            // ==========================================
+            // 0: PLAYLIST MENU (matches playlist menu.png)
+            // ==========================================
+            if root.menu_type == 0 : VerticalLayout {
+                spacing: 2px;
+
+                // 1. Добавить в очередь
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p1.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "+Ξ"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Добавить в очередь"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p1 := TouchArea {
+                        clicked => {
+                            root.add_to_queue(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // 2. Начать джем
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p2.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "🎧"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "Начать джем"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p2 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 3. Изменение сведений
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p3.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "✏️"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "Изменение сведений"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p3 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 4. Удалить
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p4.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "⊖"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Удалить"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p4 := TouchArea {
+                        clicked => {
+                            root.delete_playlist(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // 5. Скачать
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p5.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "↓"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Скачать"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p5 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // Separator
+                Rectangle { height: 1px; background: #383838; }
+
+                // 6. Создать плейлист
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p6.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "♪+"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Создать плейлист"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p6 := TouchArea {
+                        clicked => {
+                            root.create_playlist();
+                            root.close();
+                        }
+                    }
+                }
+
+                // Separator
+                Rectangle { height: 1px; background: #383838; }
+
+                // 7. Закрепить плейлист
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p7.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "📌"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "Закрепить плейлист"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_p7 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 8. Поделиться ▸ (Копировать ссылку)
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_p8.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "↑"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Поделиться"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "▸"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                    }
+                    it_p8 := TouchArea {
+                        clicked => {
+                            root.copy_link(root.target_id, 0);
+                            root.close();
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // 1: TRACK MENU (matches track_menu.png)
+            // ==========================================
+            if root.menu_type == 1 : VerticalLayout {
+                spacing: 2px;
+
+                // 1. Добавить в плейлист ▸
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t1.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "+"; color: #b3b3b3; font-size: 15px; vertical-alignment: center; }
+                        Text { text: "Добавить в плейлист"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "▸"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                    }
+                    it_t1 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 2. Добавить в / Удалить из любимых треков
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t2.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text {
+                            text: root.is_liked ? "✔" : "♡";
+                            color: root.is_liked ? #1ed760 : #b3b3b3;
+                            font-size: 14px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: root.is_liked ? "Удалить из любимых треков" : "Сохранить в «Любимые треки»";
+                            color: #ffffff;
+                            font-size: 13px;
+                            font-weight: 500;
+                            vertical-alignment: center;
+                        }
+                    }
+                    it_t2 := TouchArea {
+                        clicked => {
+                            root.like_toggle(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // 3. Добавить в очередь
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t3.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "+Ξ"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Добавить в очередь"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_t3 := TouchArea {
+                        clicked => {
+                            root.add_to_queue(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // 4. Исключить из музыкальных предпочтений
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t4.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "⊗"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Исключить из предпочтений"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_t4 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // Separator
+                Rectangle { height: 1px; background: #383838; }
+
+                // 5. К радио по треку
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t5.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "📻"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "К радио по треку"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_t5 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 6. К исполнителю
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t6.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "👤"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "К исполнителю"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "▸"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                    }
+                    it_t6 := TouchArea {
+                        clicked => {
+                            root.go_to_artist(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // 7. К альбому
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t7.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "◎"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "К альбому"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_t7 := TouchArea {
+                        clicked => {
+                            root.go_to_album(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // Separator
+                Rectangle { height: 1px; background: #383838; }
+
+                // 8. Поделиться ▸
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_t8.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "↑"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Поделиться"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "▸"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                    }
+                    it_t8 := TouchArea {
+                        clicked => {
+                            root.copy_link(root.target_id, 1);
+                            root.close();
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // 2: ALBUM MENU (matches album_menu.png)
+            // ==========================================
+            if root.menu_type == 2 : VerticalLayout {
+                spacing: 2px;
+
+                // 1. Добавить в медиатеку
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_a1.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "⊕"; color: #b3b3b3; font-size: 14px; vertical-alignment: center; }
+                        Text { text: "Добавить в медиатеку"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_a1 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 2. Добавить в очередь
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_a2.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "+Ξ"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Добавить в очередь"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_a2 := TouchArea {
+                        clicked => {
+                            root.add_to_queue(root.target_id);
+                            root.close();
+                        }
+                    }
+                }
+
+                // 3. К радио по альбому / исполнителю
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_a3.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "📻"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "К радио по исполнителю"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_a3 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // Separator
+                Rectangle { height: 1px; background: #383838; }
+
+                // 4. Скачать
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_a4.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "↓"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Скачать"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_a4 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 5. Поделиться ▸
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_a5.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "↑"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Поделиться"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "▸"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                    }
+                    it_a5 := TouchArea {
+                        clicked => {
+                            root.copy_link(root.target_id, 2);
+                            root.close();
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // 3: ARTIST MENU (matches artist_menu.png)
+            // ==========================================
+            if root.menu_type == 3 : VerticalLayout {
+                spacing: 2px;
+
+                // 1. Подписаться
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_ar1.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "👤"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "Подписаться"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_ar1 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 2. Не включать треки этого исполнителя
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_ar2.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "⊘"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Не включать треки"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_ar2 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // 3. К радио по исполнителю
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_ar3.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "📻"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                        Text { text: "К радио по исполнителю"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; }
+                    }
+                    it_ar3 := TouchArea { clicked => { root.close(); } }
+                }
+
+                // Separator
+                Rectangle { height: 1px; background: #383838; }
+
+                // 4. Поделиться ▸
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it_ar4.has-hover ? #3e3e3e : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; spacing: 10px;
+                        Text { text: "↑"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
+                        Text { text: "Поделиться"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "▸"; color: #b3b3b3; font-size: 12px; vertical-alignment: center; }
+                    }
+                    it_ar4 := TouchArea {
+                        clicked => {
+                            root.copy_link(root.target_id, 3);
+                            root.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -11,7 +11,8 @@ export component AlbumView inherits Rectangle {
 
     callback play_all();
     callback track_clicked(string);
-    callback track_context_menu(string, length, length);
+    callback track_context_menu(string, string, bool, length, length);
+    callback album_context_menu(length, length);
     callback like_track(string);
 
     Flickable {
@@ -133,11 +134,24 @@ export component AlbumView inherits Rectangle {
                         vertical-alignment: center;
                     }
 
-                    Text {
-                        text: "•••";
-                        font-size: 22px;
-                        color: Theme.text-secondary;
-                        vertical-alignment: center;
+                    Rectangle {
+                        y: (parent.height - self.height) / 2;
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: more_touch.has-hover ? #3e3e3e : transparent;
+
+                        Text {
+                            text: "•••";
+                            font-size: 20px;
+                            color: Theme.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        more_touch := TouchArea {
+                            clicked => { root.album_context_menu(220px, 320px); }
+                        }
                     }
 
                     Rectangle { horizontal-stretch: 1; }
@@ -288,6 +302,11 @@ export component AlbumView inherits Rectangle {
 
                     row_touch := TouchArea {
                         clicked => { root.track_clicked(trk.id); }
+                        pointer-event(event) => {
+                            if event.button == PointerEventButton.right && event.kind == PointerEventKind.up {
+                                root.track_context_menu(trk.id, trk.title, trk.is_liked, 380px, Math.min(Math.max(120px, (trk.index * 56px) + 260px), 620px));
+                            }
+                        }
                     }
                 }
             }

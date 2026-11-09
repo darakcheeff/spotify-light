@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
@@ -10,9 +10,17 @@ use librespot::core::SpotifyUri;
 use librespot::playback::{
     audio_backend,
     config::{AudioFormat, PlayerConfig},
-    mixer::NoOpVolume,
+    mixer::VolumeGetter,
     player::Player,
 };
+
+struct AppVolumeGetter(Arc<AtomicU64>);
+
+impl VolumeGetter for AppVolumeGetter {
+    fn attenuation_factor(&self) -> f64 {
+        f64::from_bits(self.0.load(Ordering::Relaxed))
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioSinkState {
@@ -35,7 +43,7 @@ pub enum AudioCommand {
     RecoverSink,
 }
 
-fn create_player(session: Session) -> Option<Arc<Player>> {
+fn create_player(session: Session, volume: Arc<AtomicU64>) -> Option<Arc<Player>> {
     let backend = match audio_backend::find(None) {
         Some(b) => b,
         None => {
@@ -49,7 +57,7 @@ fn create_player(session: Session) -> Option<Arc<Player>> {
     let player = Player::new(
         player_config,
         session,
-        Box::new(NoOpVolume),
+        Box::new(AppVolumeGetter(volume)),
         move || backend(None, audio_format),
     );
     Some(player)
@@ -59,6 +67,7 @@ fn create_player(session: Session) -> Option<Arc<Player>> {
 pub struct AudioEngine {
     command_tx: mpsc::Sender<AudioCommand>,
     is_playing: Arc<AtomicBool>,
+    volume: Arc<AtomicU64>,
     session: Arc<Mutex<Option<Session>>>,
     player: Arc<Mutex<Option<Arc<Player>>>>,
 }
@@ -67,6 +76,7 @@ impl AudioEngine {
     pub fn new() -> (Self, mpsc::Receiver<AudioCommand>) {
         let (command_tx, rx) = mpsc::channel(32);
         let is_playing = Arc::new(AtomicBool::new(false));
+        let volume = Arc::new(AtomicU64::new(f64::to_bits(0.8)));
         let session = Arc::new(Mutex::new(None));
         let player = Arc::new(Mutex::new(None));
 
@@ -74,6 +84,7 @@ impl AudioEngine {
             Self {
                 command_tx,
                 is_playing,
+                volume,
                 session,
                 player,
             },
@@ -87,7 +98,7 @@ impl AudioEngine {
 
     pub async fn init_session(&self, session: Session) {
         info!("[AUDIO] Connecting native playback engine to Spotify AP session...");
-        if let Some(player) = create_player(session.clone()) {
+        if let Some(player) = create_player(session.clone(), Arc::clone(&self.volume)) {
             let mut p_guard = self.player.lock().await;
             *p_guard = Some(player);
 
@@ -151,11 +162,16 @@ impl AudioEngine {
                     p.seek((*pos * 1000.0) as u32);
                 }
             }
+            AudioCommand::SetVolume(vol) => {
+                let clamped = (*vol as f64).clamp(0.0, 1.0);
+                self.volume.store(f64::to_bits(clamped), Ordering::Relaxed);
+                info!("[AUDIO] Hardware/Software volume scaled to {:.2}", clamped);
+            }
             AudioCommand::RecoverSink => {
                 warn!("[AUDIO SUPERVISOR] Audio sink reconnection requested...");
                 let s_guard = self.session.lock().await;
                 if let Some(session) = s_guard.as_ref() {
-                    if let Some(new_player) = create_player(session.clone()) {
+                    if let Some(new_player) = create_player(session.clone(), Arc::clone(&self.volume)) {
                         let mut p_guard = self.player.lock().await;
                         *p_guard = Some(new_player);
                         info!("[AUDIO SUPERVISOR] Audio backend successfully re-established!");

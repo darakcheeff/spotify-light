@@ -10,6 +10,7 @@ import { SettingsView } from "components/settings_view.slint";
 import { ProfileMenu } from "components/profile_menu.slint";
 import { LyricsView } from "components/lyrics_view.slint";
 import { LoginDialog } from "components/login_dialog.slint";
+import { ContextMenu } from "components/context_menu.slint";
 
 export component AppWindow inherits Window {
     title: "spotify-light";
@@ -33,6 +34,13 @@ export component AppWindow inherits Window {
     in-out property <int> drawer_mode: 0; // 0: Queue, 1: Connect Devices
     in-out property <bool> is_login_open: false;
     in-out property <bool> is_profile_menu_open: false;
+    in-out property <bool> is_context_menu_open: false;
+    in-out property <int> context_menu_type: 0; // 0: Playlist, 1: Track, 2: Album, 3: Artist
+    in-out property <string> context_menu_id: "";
+    in-out property <string> context_menu_title: "";
+    in-out property <bool> context_menu_is_liked: false;
+    in-out property <length> context_menu_x: 200px;
+    in-out property <length> context_menu_y: 200px;
 
     // Real dynamic collections
     in-out property <[PlaylistItem]> user_playlists: [];
@@ -69,6 +77,11 @@ export component AppWindow inherits Window {
     callback otp_submitted(string, string);
     callback browser_login_requested();
     callback logout_requested();
+    callback add_to_queue(string);
+    callback toggle_like_track(string);
+    callback copy_to_clipboard(string);
+    callback delete_playlist(string);
+    callback create_new_playlist();
 
     VerticalLayout {
         padding: 0px;
@@ -124,6 +137,16 @@ export component AppWindow inherits Window {
                     root.is_lyrics_open = false;
                     root.select_playlist(id);
                 }
+                playlist_context_menu(id, x, y) => {
+                    root.context_menu_type = 0;
+                    root.context_menu_id = id;
+                    root.context_menu_x = x;
+                    root.context_menu_y = y;
+                    root.is_context_menu_open = true;
+                }
+                create_clicked => {
+                    root.create_new_playlist();
+                }
                 login_clicked => {
                     root.is_login_open = true;
                 }
@@ -161,6 +184,25 @@ export component AppWindow inherits Window {
                         }
                     }
                     track_clicked(id) => { root.play_track(id); }
+                    track_context_menu(id, title, is_liked, x, y) => {
+                        root.context_menu_type = 1;
+                        root.context_menu_id = id;
+                        root.context_menu_title = title;
+                        root.context_menu_is_liked = is_liked;
+                        root.context_menu_x = x;
+                        root.context_menu_y = y;
+                        root.is_context_menu_open = true;
+                    }
+                    album_context_menu(x, y) => {
+                        root.context_menu_type = 2;
+                        root.context_menu_id = "";
+                        root.context_menu_x = x;
+                        root.context_menu_y = y;
+                        root.is_context_menu_open = true;
+                    }
+                    like_track(id) => {
+                        root.toggle_like_track(id);
+                    }
                 }
 
                 // View 4: Browse / Обзор View (matching 6.png)
@@ -182,8 +224,10 @@ export component AppWindow inherits Window {
             if root.is_drawer_open : RightDrawer {
                 mode: root.drawer_mode;
                 devices: root.discovered_devices;
+                queue_items: root.current_tracks;
                 close_drawer => { root.is_drawer_open = false; }
                 select_device(id) => { root.select_connect_device(id); }
+                play_queue_item(id) => { root.play_track(id); }
             }
         }
 
@@ -260,6 +304,30 @@ export component AppWindow inherits Window {
         logout => {
             root.is_profile_menu_open = false;
             root.logout_requested();
+        }
+    }
+
+    // Context Menu Overlay (Playlist, Track, Album, Artist - matching official UI)
+    if root.is_context_menu_open : ContextMenu {
+        menu_type: root.context_menu_type;
+        target_id: root.context_menu_id;
+        target_title: root.context_menu_title;
+        is_liked: root.context_menu_is_liked;
+        menu_x: root.context_menu_x;
+        menu_y: root.context_menu_y;
+        close => { root.is_context_menu_open = false; }
+        add_to_queue(id) => { root.add_to_queue(id); }
+        like_toggle(id) => { root.toggle_like_track(id); }
+        copy_link(id, type_idx) => { root.copy_to_clipboard(id); }
+        delete_playlist(id) => { root.delete_playlist(id); }
+        create_playlist => { root.create_new_playlist(); }
+        go_to_artist(id) => {
+            root.current_workspace = 1;
+            root.select_playlist(id);
+        }
+        go_to_album(id) => {
+            root.current_workspace = 1;
+            root.select_playlist(id);
         }
     }
 }

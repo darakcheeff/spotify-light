@@ -355,8 +355,171 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("[UI ACTION] Playback device selected: {}", device_id);
     });
 
-    app.on_search_query(move |query| {
-        info!("[UI ACTION] Search query entered: '{}'", query);
+    app.on_search_query({
+        let cached_p = Arc::clone(&cached_playlists);
+        let cached_alb = Arc::clone(&cached_albums);
+        let cached_art = Arc::clone(&cached_artists);
+        let app_weak = app_weak.clone();
+        move |query| {
+            let q = query.to_string().trim().to_lowercase();
+            info!("[UI ACTION] Live search query: '{}'", q);
+            let cached_p = Arc::clone(&cached_p);
+            let cached_alb = Arc::clone(&cached_alb);
+            let cached_art = Arc::clone(&cached_art);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                let mut all = Vec::new();
+                {
+                    let p = cached_p.lock().await;
+                    all.extend(p.clone());
+                }
+                {
+                    let alb = cached_alb.lock().await;
+                    all.extend(alb.clone());
+                }
+                {
+                    let art = cached_art.lock().await;
+                    all.extend(art.clone());
+                }
+
+                let filtered: Vec<PlaylistItem> = if q.is_empty() {
+                    all
+                } else {
+                    all.into_iter().filter(|item| {
+                        item.title.to_lowercase().contains(&q) || item.subtitle.to_lowercase().contains(&q)
+                    }).collect()
+                };
+
+                let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(filtered)));
+                });
+            });
+        }
+    });
+
+    // Context Menu Action: Add to Queue
+    app.on_add_to_queue({
+        let app_weak = app_weak.clone();
+        let engine = audio_sender.clone();
+        move |track_id| {
+            info!("[UI ACTION] Add track to queue: {}", track_id);
+            let tid = track_id.to_string();
+            let app_weak = app_weak.clone();
+            let engine = engine.clone();
+            tokio::spawn(async move {
+                // If nothing currently playing, play immediately
+                if !engine.is_playing() {
+                    engine.send_command(AudioCommand::LoadUri(format!("spotify:track:{}", tid))).await;
+                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_is_playing(true);
+                    });
+                }
+            });
+        }
+    });
+
+    // Context Menu Action: Toggle Like
+    app.on_toggle_like_track({
+        let app_weak = app_weak.clone();
+        move |track_id| {
+            info!("[UI ACTION] Toggle like for track: {}", track_id);
+            let tid = track_id.to_string();
+            let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                let tracks = ui.get_current_tracks();
+                let mut updated = Vec::new();
+                for i in 0..tracks.row_count() {
+                    if let Some(mut t) = tracks.row_data(i) {
+                        if t.id == tid {
+                            t.is_liked = !t.is_liked;
+                            ui.set_is_liked(t.is_liked);
+                        }
+                        updated.push(t);
+                    }
+                }
+                ui.set_current_tracks(ModelRc::new(VecModel::from(updated)));
+            });
+        }
+    });
+
+    // Context Menu Action: Copy Link
+    app.on_copy_to_clipboard({
+        move |target_id| {
+            let tid = target_id.to_string();
+            info!("[UI ACTION] Copy link to clipboard for: {}", tid);
+            tokio::spawn(async move {
+                let link = if tid.starts_with("http") {
+                    tid
+                } else {
+                    format!("https://open.spotify.com/track/{}", tid)
+                };
+                if let Ok(mut cb) = arboard::Clipboard::new() {
+                    let _ = cb.set_text(link);
+                }
+            });
+        }
+    });
+
+    // Context Menu Action: Delete Playlist
+    app.on_delete_playlist({
+        let cached_p = Arc::clone(&cached_playlists);
+        let app_weak = app_weak.clone();
+        move |pl_id| {
+            let id = pl_id.to_string();
+            info!("[UI ACTION] Delete playlist requested: {}", id);
+            let cached_p = Arc::clone(&cached_p);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                {
+                    let mut guard = cached_p.lock().await;
+                    guard.retain(|x| x.id != id);
+                }
+                let updated = {
+                    let guard = cached_p.lock().await;
+                    guard.clone()
+                };
+                let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(updated)));
+                });
+            });
+        }
+    });
+
+    // Sidebar Action: Create New Playlist
+    app.on_create_new_playlist({
+        let cached_p = Arc::clone(&cached_playlists);
+        let app_weak = app_weak.clone();
+        move || {
+            info!("[UI ACTION] Create new playlist requested");
+            let cached_p = Arc::clone(&cached_p);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                let new_item = {
+                    let mut guard = cached_p.lock().await;
+                    let count = guard.len() + 1;
+                    let item = PlaylistItem {
+                        id: format!("custom_{}", count).into(),
+                        title: format!("Мой плейлист #{}", count).into(),
+                        subtitle: "Плейлист • Пользовательский".into(),
+                        is_pinned: false,
+                        is_active: false,
+                        item_type: 0,
+                        image_url: "".into(),
+                    };
+                    guard.insert(0, item.clone());
+                    item
+                };
+                let all = {
+                    let guard = cached_p.lock().await;
+                    guard.clone()
+                };
+                let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(all)));
+                    ui.set_current_workspace(1);
+                    ui.set_current_album_title(new_item.title);
+                    ui.set_current_tracks(ModelRc::new(VecModel::from(Vec::<TrackItem>::new())));
+                });
+            });
+        }
     });
 
     app.on_filter_library({

@@ -42,95 +42,100 @@ async fn populate_library(
 ) {
     info!("[LIBRARY] Concurrently loading playlists, saved albums, and followed artists...");
 
+    // 1. Concurrently fetch playlists, saved albums, and artists
     let client_p = client.clone();
-    let p_handle = tokio::spawn(async move { client_p.get_playlists().await });
+    let app_weak_p = app_weak.clone();
+    let cached_p_clone = Arc::clone(&cached_playlists);
+    tokio::spawn(async move {
+        if let Ok(playlists) = client_p.get_playlists().await {
+            let items: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+                let item_type = if p.title.contains("Любимые") || p.title.contains("Liked") {
+                    3
+                } else if p.title.contains("радио") || p.title.contains("Radio") || p.title.contains("Killshot") {
+                    4
+                } else if p.title.contains("Альбом") {
+                    1
+                } else {
+                    0
+                };
+                PlaylistItem {
+                    id: p.id.into(),
+                    title: p.title.into(),
+                    subtitle: p.subtitle.into(),
+                    is_pinned: item_type == 3,
+                    is_active: false,
+                    item_type,
+                    image_url: "".into(),
+                }
+            }).collect();
 
-    let client_alb = client.clone();
-    let alb_handle = tokio::spawn(async move { client_alb.get_saved_albums().await });
+            info!("[LIBRARY] Playlists loaded: {}", items.len());
+            {
+                let mut guard = cached_p_clone.lock().await;
+                *guard = items.clone();
+            }
+            let _ = app_weak_p.upgrade_in_event_loop(move |ui| {
+                ui.set_user_playlists(ModelRc::new(VecModel::from(items)));
+            });
+        }
+    });
 
     let client_art = client.clone();
-    let art_handle = tokio::spawn(async move { client_art.get_followed_artists().await });
+    let app_weak_art = app_weak.clone();
+    let cached_art_clone = Arc::clone(&cached_artists);
+    let cached_p_ref = Arc::clone(&cached_playlists);
+    tokio::spawn(async move {
+        if let Ok(artists) = client_art.get_followed_artists().await {
+            let items: Vec<PlaylistItem> = artists.into_iter().map(|art| {
+                PlaylistItem {
+                    id: art.id.into(),
+                    title: art.title.into(),
+                    subtitle: art.subtitle.into(),
+                    is_pinned: false,
+                    is_active: false,
+                    item_type: 2,
+                    image_url: "".into(),
+                }
+            }).collect();
 
-    let (p_res, alb_res, art_res) = tokio::join!(p_handle, alb_handle, art_handle);
-
-    let mut new_p = Vec::new();
-    if let Ok(Ok(playlists)) = p_res {
-        new_p = playlists.into_iter().map(|p| {
-            let item_type = if p.title.contains("Любимые") || p.title.contains("Liked") {
-                3
-            } else if p.title.contains("радио") || p.title.contains("Radio") || p.title.contains("Killshot") {
-                4
-            } else if p.title.contains("Альбом") {
-                1
-            } else {
-                0
-            };
-            PlaylistItem {
-                id: p.id.into(),
-                title: p.title.into(),
-                subtitle: p.subtitle.into(),
-                is_pinned: item_type == 3,
-                is_active: false,
-                item_type,
-                image_url: "".into(),
+            info!("[LIBRARY] Followed artists loaded: {}", items.len());
+            {
+                let mut guard = cached_art_clone.lock().await;
+                *guard = items.clone();
             }
-        }).collect();
-    }
-
-    let mut new_alb = Vec::new();
-    if let Ok(Ok(albums)) = alb_res {
-        new_alb = albums.into_iter().map(|a| {
-            PlaylistItem {
-                id: a.id.into(),
-                title: a.title.into(),
-                subtitle: a.subtitle.into(),
-                is_pinned: false,
-                is_active: false,
-                item_type: 1,
-                image_url: "".into(),
+            // Merge into UI view if on "Все"
+            let mut merged = Vec::new();
+            {
+                let p = cached_p_ref.lock().await;
+                merged.extend(p.clone());
             }
-        }).collect();
-    }
+            merged.extend(items);
+            let _ = app_weak_art.upgrade_in_event_loop(move |ui| {
+                ui.set_user_playlists(ModelRc::new(VecModel::from(merged)));
+            });
+        }
+    });
 
-    let mut new_art = Vec::new();
-    if let Ok(Ok(artists)) = art_res {
-        new_art = artists.into_iter().map(|art| {
-            PlaylistItem {
-                id: art.id.into(),
-                title: art.title.into(),
-                subtitle: art.subtitle.into(),
-                is_pinned: false,
-                is_active: false,
-                item_type: 2,
-                image_url: "".into(),
-            }
-        }).collect();
-    }
+    let client_alb = client.clone();
+    let cached_alb_clone = Arc::clone(&cached_albums);
+    tokio::spawn(async move {
+        if let Ok(albums) = client_alb.get_saved_albums().await {
+            let items: Vec<PlaylistItem> = albums.into_iter().map(|a| {
+                PlaylistItem {
+                    id: a.id.into(),
+                    title: a.title.into(),
+                    subtitle: a.subtitle.into(),
+                    is_pinned: false,
+                    is_active: false,
+                    item_type: 1,
+                    image_url: "".into(),
+                }
+            }).collect();
 
-    info!("[LIBRARY SUCCESS] Loaded {} playlists, {} albums, {} artists", new_p.len(), new_alb.len(), new_art.len());
-
-    // Update caches
-    {
-        let mut guard = cached_playlists.lock().await;
-        *guard = new_p.clone();
-    }
-    {
-        let mut guard = cached_albums.lock().await;
-        *guard = new_alb.clone();
-    }
-    {
-        let mut guard = cached_artists.lock().await;
-        *guard = new_art.clone();
-    }
-
-    // Default "Все" view: playlists + albums + artists
-    let mut all = Vec::new();
-    all.extend(new_p);
-    all.extend(new_alb);
-    all.extend(new_art);
-
-    let _ = app_weak.upgrade_in_event_loop(move |ui| {
-        ui.set_user_playlists(ModelRc::new(VecModel::from(all)));
+            info!("[LIBRARY] Saved albums loaded: {}", items.len());
+            let mut guard = cached_alb_clone.lock().await;
+            *guard = items;
+        }
     });
 }
 

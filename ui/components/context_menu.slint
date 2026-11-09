@@ -34,8 +34,9 @@ export component ContextMenu inherits Rectangle {
     menu_box := Rectangle {
         // Clamp coordinates within window bounds
         x: Math.min(Math.max(8px, root.menu_x), parent.width - self.width - 12px);
-        y: Math.min(Math.max(8px, root.menu_y), parent.height - self.height - 80px);
+        y: Math.min(Math.max(64px, root.menu_y), parent.height - self.height - 80px);
         width: 230px;
+        height: root.menu_type == 0 ? 280px : (root.menu_type == 1 ? 280px : (root.menu_type == 2 ? 180px : 150px));
         background: #282828;
         border-radius: 6px;
         border-width: 1px;
@@ -46,6 +47,7 @@ export component ContextMenu inherits Rectangle {
         VerticalLayout {
             padding: 4px;
             spacing: 2px;
+            alignment: start;
 
             // ==========================================
             // 0: PLAYLIST MENU (matches playlist menu.png)

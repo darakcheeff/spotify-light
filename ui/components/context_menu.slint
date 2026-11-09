@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme, PlaylistItem } from "../theme.slint";
 
 export component ContextMenu inherits Rectangle {
     background: transparent;
@@ -9,6 +9,9 @@ export component ContextMenu inherits Rectangle {
     in property <bool> is_liked: false;
     in property <length> menu_x: 200px;
     in property <length> menu_y: 150px;
+    in property <[PlaylistItem]> playlists: [];
+    in-out property <bool> is_submenu_open: false;
+    in-out property <string> submenu_search: "";
 
     callback close();
     callback add_to_queue(string);
@@ -18,15 +21,13 @@ export component ContextMenu inherits Rectangle {
     callback create_playlist();
     callback go_to_artist(string);
     callback go_to_album(string);
+    callback add_track_to_playlist(string, string);
 
-    // Full-screen transparent backdrop: clicking outside immediately closes the menu
+    // Full-screen transparent backdrop: clicking outside closes the menu
     TouchArea {
+        width: 100%;
+        height: 100%;
         clicked => { root.close(); }
-        pointer-event(event) => {
-            if event.kind == PointerEventKind.down {
-                root.close();
-            }
-        }
     }
 
     // Floating Popup Box
@@ -270,7 +271,11 @@ export component ContextMenu inherits Rectangle {
                         Text { text: "Добавить в плейлист"; color: #ffffff; font-size: 13px; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; }
                         Text { text: "▸"; color: #b3b3b3; font-size: 13px; vertical-alignment: center; }
                     }
-                    it_t1 := TouchArea { clicked => { root.close(); } }
+                    it_t1 := TouchArea {
+                        clicked => {
+                            root.is_submenu_open = !root.is_submenu_open;
+                        }
+                    }
                 }
 
                 // 2. Удалить из любимых треков / Сохранить в «Любимые треки»
@@ -617,6 +622,113 @@ export component ContextMenu inherits Rectangle {
                         clicked => {
                             root.copy_link(root.target_id, 3);
                             root.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Cascading Submenu Box ("Добавить в плейлист ▸" matching official Spotify UI)
+    if root.is_submenu_open : submenu_box := Rectangle {
+        width: 260px;
+        height: 320px;
+        x: (menu_box.x + menu_box.width + self.width > parent.width - 16px)
+            ? Math.max(12px, menu_box.x - self.width - 4px)
+            : (menu_box.x + menu_box.width + 4px);
+        y: menu_box.y;
+        background: #282828;
+        border-radius: 4px;
+        border-width: 1px;
+        border-color: #383838;
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #000000cc;
+
+        VerticalLayout {
+            padding: 6px;
+            spacing: 4px;
+
+            // Search input inside submenu: "Поиск плейлиста"
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: #1f1f1f;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
+                    Text { text: "🔍"; font-size: 11px; color: #b3b3b3; vertical-alignment: center; }
+                    TextInput {
+                        text <=> root.submenu_search;
+                        color: #ffffff;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // Action: "+ Создать плейлист"
+            Rectangle {
+                height: 34px;
+                border-radius: 4px;
+                background: sub_create.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 8px;
+                    Text { text: "+"; font-size: 15px; color: #ffffff; vertical-alignment: center; }
+                    Text { text: "Создать плейлист"; font-size: 13px; font-weight: 500; color: #ffffff; vertical-alignment: center; }
+                }
+                sub_create := TouchArea {
+                    clicked => {
+                        root.create_playlist();
+                        root.close();
+                    }
+                }
+            }
+
+            // Divider
+            Rectangle { height: 1px; background: #383838; }
+
+            // Playlists list inside Flickable
+            Flickable {
+                vertical-stretch: 1;
+                content-height: root.playlists.length * 36px;
+
+                VerticalLayout {
+                    spacing: 2px;
+                    for pl in root.playlists : Rectangle {
+                        height: 34px;
+                        border-radius: 4px;
+                        background: sub_pl_touch.has-hover ? #3e3e3e : transparent;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 8px;
+                            alignment: center;
+                            Text {
+                                text: "♪";
+                                font-size: 13px;
+                                color: #b3b3b3;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: pl.title;
+                                font-size: 13px;
+                                font-weight: 500;
+                                color: #ffffff;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        sub_pl_touch := TouchArea {
+                            clicked => {
+                                root.add_track_to_playlist(root.target_id, pl.id);
+                                root.close();
+                            }
                         }
                     }
                 }

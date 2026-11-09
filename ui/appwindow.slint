@@ -46,6 +46,7 @@ export component AppWindow inherits Window {
     in-out property <[PlaylistItem]> user_playlists: [];
     in-out property <string> current_album_title: "";
     in-out property <[TrackItem]> current_tracks: [];
+    in-out property <[TrackItem]> recent_items: [];
     in-out property <[DeviceItem]> discovered_devices: [];
 
     // Track playback state (synchronized with Audio Engine via event loop)
@@ -69,6 +70,7 @@ export component AppWindow inherits Window {
     callback change_volume(float);
     callback select_connect_device(string);
     callback search_query(string);
+    callback library_search_query(string);
     callback select_playlist(string);
     callback filter_library(int);
     callback play_track(string);
@@ -82,6 +84,7 @@ export component AppWindow inherits Window {
     callback copy_to_clipboard(string);
     callback delete_playlist(string);
     callback create_new_playlist();
+    callback add_track_to_playlist(string, string);
 
     VerticalLayout {
         padding: 0px;
@@ -146,6 +149,9 @@ export component AppWindow inherits Window {
                 }
                 create_clicked => {
                     root.create_new_playlist();
+                }
+                library_search_changed(q) => {
+                    root.library_search_query(q);
                 }
                 login_clicked => {
                     root.is_login_open = true;
@@ -225,6 +231,7 @@ export component AppWindow inherits Window {
                 mode: root.drawer_mode;
                 devices: root.discovered_devices;
                 queue_items: root.current_tracks;
+                recent_items: root.recent_items;
                 close_drawer => { root.is_drawer_open = false; }
                 select_device(id) => { root.select_connect_device(id); }
                 play_queue_item(id) => { root.play_track(id); }
@@ -315,12 +322,14 @@ export component AppWindow inherits Window {
         is_liked: root.context_menu_is_liked;
         menu_x: root.context_menu_x;
         menu_y: root.context_menu_y;
+        playlists: root.user_playlists;
         close => { root.is_context_menu_open = false; }
         add_to_queue(id) => { root.add_to_queue(id); }
         like_toggle(id) => { root.toggle_like_track(id); }
         copy_link(id, type_idx) => { root.copy_to_clipboard(id); }
         delete_playlist(id) => { root.delete_playlist(id); }
         create_playlist => { root.create_new_playlist(); }
+        add_track_to_playlist(tid, pid) => { root.add_track_to_playlist(tid, pid); }
         go_to_artist(id) => {
             root.current_workspace = 1;
             root.select_playlist(id);

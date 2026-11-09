@@ -137,6 +137,30 @@ async fn populate_library(
             *guard = items;
         }
     });
+
+    // 4. Concurrently fetch recently played tracks for RightDrawer history
+    let client_recent = client.clone();
+    let app_weak_recent = app_weak.clone();
+    tokio::spawn(async move {
+        if let Ok(recents) = client_recent.get_recently_played().await {
+            let items: Vec<TrackItem> = recents.into_iter().map(|t| TrackItem {
+                id: t.id.into(),
+                index: t.index,
+                title: t.title.into(),
+                artist: t.artist.into(),
+                album: t.album.into(),
+                duration_str: t.duration_str.into(),
+                play_count_str: "".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "".into(),
+            }).collect();
+            info!("[LIBRARY] Recently played tracks loaded: {}", items.len());
+            let _ = app_weak_recent.upgrade_in_event_loop(move |ui| {
+                ui.set_recent_items(ModelRc::new(VecModel::from(items)));
+            });
+        }
+    });
 }
 
 #[tokio::main]
@@ -360,14 +384,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("[UI ACTION] Playback device selected: {}", device_id);
     });
 
-    app.on_search_query({
+    // 1. Library Search (Local Sidebar Filter)
+    app.on_library_search_query({
         let cached_p = Arc::clone(&cached_playlists);
         let cached_alb = Arc::clone(&cached_albums);
         let cached_art = Arc::clone(&cached_artists);
         let app_weak = app_weak.clone();
         move |query| {
             let q = query.to_string().trim().to_lowercase();
-            info!("[UI ACTION] Live search query: '{}'", q);
+            info!("[UI ACTION] Library local filter query: '{}'", q);
             let cached_p = Arc::clone(&cached_p);
             let cached_alb = Arc::clone(&cached_alb);
             let cached_art = Arc::clone(&cached_art);
@@ -402,6 +427,82 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // 2. Global TopBar Search (Spotify Catalog Search)
+    app.on_search_query({
+        let api_client_lock = Arc::clone(&active_api_client);
+        let app_weak = app_weak.clone();
+        move |query| {
+            let q = query.to_string().trim().to_string();
+            info!("[UI ACTION] Global Spotify catalog search: '{}'", q);
+            let api_client_lock = Arc::clone(&api_client_lock);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                let client_opt = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+
+                if let Some(client) = client_opt {
+                    if q.is_empty() {
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_current_workspace(2);
+                        });
+                        return;
+                    }
+
+                    // Switch view to Browse/Search (workspace 2)
+                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_current_workspace(2);
+                    });
+
+                    match client.search(&q).await {
+                        Ok(res) => {
+                            let app_weak_res = app_weak.clone();
+                            let _ = app_weak_res.upgrade_in_event_loop(move |ui| {
+                                let tracks: Vec<TrackItem> = res.tracks.into_iter().map(|t| TrackItem {
+                                    id: t.id.into(),
+                                    index: t.index,
+                                    title: t.title.into(),
+                                    artist: t.artist.into(),
+                                    album: t.album.into(),
+                                    duration_str: t.duration_str.into(),
+                                    play_count_str: "".into(),
+                                    is_liked: false,
+                                    is_playing: false,
+                                    image_url: "".into(),
+                                }).collect();
+                                ui.set_current_tracks(ModelRc::new(VecModel::from(tracks)));
+                            });
+                        }
+                        Err(e) => {
+                            error!("[API ERROR] Global search failed: {}", e);
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    // Cascading Context Menu Action: Add Track to Playlist
+    app.on_add_track_to_playlist({
+        let api_client_lock = Arc::clone(&active_api_client);
+        move |track_id, playlist_id| {
+            let tid = track_id.to_string();
+            let pid = playlist_id.to_string();
+            info!("[UI ACTION] Adding track {} to playlist {}", tid, pid);
+            let api_client_lock = Arc::clone(&api_client_lock);
+            tokio::spawn(async move {
+                let client_opt = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+                if let Some(client) = client_opt {
+                    let _ = client.add_track_to_playlist(&pid, &tid).await;
+                }
+            });
+        }
+    });
+
     // Context Menu Action: Add to Queue
     app.on_add_to_queue({
         let app_weak = app_weak.clone();
@@ -425,23 +526,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Context Menu Action: Toggle Like
     app.on_toggle_like_track({
+        let api_client_lock = Arc::clone(&active_api_client);
         let app_weak = app_weak.clone();
         move |track_id| {
-            info!("[UI ACTION] Toggle like for track: {}", track_id);
             let tid = track_id.to_string();
-            let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                let tracks = ui.get_current_tracks();
-                let mut updated = Vec::new();
-                for i in 0..tracks.row_count() {
-                    if let Some(mut t) = tracks.row_data(i) {
-                        if t.id == tid {
-                            t.is_liked = !t.is_liked;
-                            ui.set_is_liked(t.is_liked);
+            info!("[UI ACTION] Toggle like for track: {}", tid);
+            let api_client_lock = Arc::clone(&api_client_lock);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                let client_opt = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+                if let Some(client) = client_opt {
+                    let _ = client.save_track(&tid).await;
+                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                        let tracks = ui.get_current_tracks();
+                        let mut updated = Vec::new();
+                        for i in 0..tracks.row_count() {
+                            if let Some(mut t) = tracks.row_data(i) {
+                                if t.id == tid {
+                                    t.is_liked = !t.is_liked;
+                                    ui.set_is_liked(t.is_liked);
+                                }
+                                updated.push(t);
+                            }
                         }
-                        updated.push(t);
-                    }
+                        ui.set_current_tracks(ModelRc::new(VecModel::from(updated)));
+                    });
                 }
-                ui.set_current_tracks(ModelRc::new(VecModel::from(updated)));
             });
         }
     });
@@ -454,6 +567,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::spawn(async move {
                 let link = if tid.starts_with("http") {
                     tid
+                } else if tid.starts_with("spotify:") {
+                    format!("https://open.spotify.com/{}", tid.replace("spotify:", "").replace(":", "/"))
                 } else {
                     format!("https://open.spotify.com/track/{}", tid)
                 };
@@ -466,14 +581,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Context Menu Action: Delete Playlist
     app.on_delete_playlist({
+        let api_client_lock = Arc::clone(&active_api_client);
         let cached_p = Arc::clone(&cached_playlists);
         let app_weak = app_weak.clone();
         move |pl_id| {
             let id = pl_id.to_string();
             info!("[UI ACTION] Delete playlist requested: {}", id);
+            let api_client_lock = Arc::clone(&api_client_lock);
             let cached_p = Arc::clone(&cached_p);
             let app_weak = app_weak.clone();
             tokio::spawn(async move {
+                let client_opt = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+                if let Some(client) = client_opt {
+                    let _ = client.delete_playlist(&id).await;
+                }
                 {
                     let mut guard = cached_p.lock().await;
                     guard.retain(|x| x.id != id);
@@ -485,6 +609,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
                     ui.set_user_playlists(ModelRc::new(VecModel::from(updated)));
                 });
+            });
+        }
+    });
+
+    // Action: Create New Playlist
+    app.on_create_new_playlist({
+        let api_client_lock = Arc::clone(&active_api_client);
+        let cached_p = Arc::clone(&cached_playlists);
+        let app_weak = app_weak.clone();
+        move || {
+            info!("[UI ACTION] Create new playlist requested");
+            let api_client_lock = Arc::clone(&api_client_lock);
+            let cached_p = Arc::clone(&cached_p);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                let client_opt = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+                if let Some(client) = client_opt {
+                    if let Ok(new_pl) = client.create_playlist("Мой плейлист").await {
+                        let new_item = PlaylistItem {
+                            id: new_pl.id.into(),
+                            title: new_pl.title.into(),
+                            subtitle: new_pl.subtitle.into(),
+                            image_url: "".into(),
+                            item_type: 0,
+                            is_pinned: false,
+                            is_active: false,
+                        };
+                        let mut p = cached_p.lock().await;
+                        p.insert(0, new_item);
+                        let updated = p.clone();
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_user_playlists(ModelRc::new(VecModel::from(updated)));
+                        });
+                    }
+                }
             });
         }
     });

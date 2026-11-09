@@ -44,8 +44,17 @@ pub enum AudioCommand {
 }
 
 fn create_player(session: Session, volume: Arc<AtomicU64>) -> Option<Arc<Player>> {
-    let backend = match audio_backend::find(None) {
-        Some(b) => b,
+    // Under Linux/PipeWire desktop environments, prioritize PulseAudio backend
+    // to route cleanly through pipewire-pulse without device conflicts.
+    let backend = audio_backend::find(Some("pulseaudio".to_string()))
+        .or_else(|| audio_backend::find(Some("alsa".to_string())))
+        .or_else(|| audio_backend::find(None));
+
+    let backend = match backend {
+        Some(b) => {
+            info!("[AUDIO] Selected audio backend sink for playback");
+            b
+        }
         None => {
             error!("[AUDIO ERROR] No compatible audio backend found (PulseAudio/ALSA/PipeWire)");
             return None;
@@ -241,6 +250,8 @@ impl AudioEngine {
 
     /// Probes if the system sound server (PipeWire, PulseAudio, or ALSA) is reachable and ready to accept streams.
     fn probe_audio_sink() -> bool {
-        audio_backend::find(None).is_some()
+        audio_backend::find(Some("pulseaudio".to_string()))
+            .or_else(|| audio_backend::find(None))
+            .is_some()
     }
 }

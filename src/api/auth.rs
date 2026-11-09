@@ -883,4 +883,251 @@ impl SpotifyApiClient {
             }
         }
     }
+
+    pub async fn search(&self, query: &str) -> Result<SearchResult, String> {
+        let url = reqwest::Url::parse_with_params(
+            "https://api.spotify.com/v1/search",
+            &[("q", query), ("type", "track,artist,album,playlist"), ("limit", "10")]
+        ).map_err(|e| format!("URL error: {}", e))?;
+
+        info!("[API] Global search for query: '{}'", query);
+        let json = self.send_with_retry(url.as_str()).await?;
+        let mut res = SearchResult::default();
+
+        if let Some(items) = json.get("tracks").and_then(|t| t.get("items")).and_then(|v| v.as_array()) {
+            for (idx, item) in items.iter().enumerate() {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let title = item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let artist = item.get("artists")
+                    .and_then(|a| a.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|art| art.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Неизвестный исполнитель")
+                    .to_string();
+                let album = item.get("album")
+                    .and_then(|a| a.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let duration_ms = item.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+                let duration_str = format!("{}:{:02}", duration_ms / 60000, (duration_ms % 60000) / 1000);
+
+                res.tracks.push(SimpleTrack {
+                    id,
+                    index: (idx + 1) as i32,
+                    title,
+                    artist,
+                    album,
+                    duration_str,
+                });
+            }
+        }
+
+        if let Some(items) = json.get("artists").and_then(|a| a.get("items")).and_then(|v| v.as_array()) {
+            for item in items {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let title = item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let followers = item.get("followers").and_then(|f| f.get("total")).and_then(|t| t.as_u64()).unwrap_or(0);
+                res.artists.push(SimplePlaylist {
+                    id,
+                    title,
+                    subtitle: format!("Исполнитель • {} слушателей", followers),
+                    track_count: 0,
+                });
+            }
+        }
+
+        if let Some(items) = json.get("albums").and_then(|a| a.get("items")).and_then(|v| v.as_array()) {
+            for item in items {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let title = item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let artist = item.get("artists")
+                    .and_then(|a| a.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|art| art.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Альбом")
+                    .to_string();
+                res.albums.push(SimplePlaylist {
+                    id,
+                    title,
+                    subtitle: format!("Альбом • {}", artist),
+                    track_count: 0,
+                });
+            }
+        }
+
+        if let Some(items) = json.get("playlists").and_then(|p| p.get("items")).and_then(|v| v.as_array()) {
+            for item in items {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let title = item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let owner = item.get("owner").and_then(|o| o.get("display_name")).and_then(|v| v.as_str()).unwrap_or("Spotify");
+                res.playlists.push(SimplePlaylist {
+                    id,
+                    title,
+                    subtitle: format!("Плейлист • {}", owner),
+                    track_count: 0,
+                });
+            }
+        }
+
+        info!("[API SUCCESS] Search resolved {} tracks, {} artists, {} albums, {} playlists",
+            res.tracks.len(), res.artists.len(), res.albums.len(), res.playlists.len());
+        Ok(res)
+    }
+
+    pub async fn get_recently_played(&self) -> Result<Vec<SimpleTrack>, String> {
+        let url = "https://api.spotify.com/v1/me/player/recently-played?limit=20";
+        info!("[API] Fetching recently played tracks...");
+        let json = self.send_with_retry(url).await?;
+        let mut list = Vec::new();
+        if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
+            for (idx, item) in items.iter().enumerate() {
+                if let Some(track) = item.get("track") {
+                    let id = track.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let title = track.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let artist = track.get("artists")
+                        .and_then(|a| a.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|art| art.get("name"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Неизвестный исполнитель")
+                        .to_string();
+                    let album = track.get("album")
+                        .and_then(|a| a.get("name"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let duration_ms = track.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let duration_str = format!("{}:{:02}", duration_ms / 60000, (duration_ms % 60000) / 1000);
+
+                    list.push(SimpleTrack {
+                        id,
+                        index: (idx + 1) as i32,
+                        title,
+                        artist,
+                        album,
+                        duration_str,
+                    });
+                }
+            }
+        }
+        info!("[API SUCCESS] Retrieved {} recently played tracks", list.len());
+        Ok(list)
+    }
+
+    pub async fn add_track_to_playlist(&self, playlist_id: &str, track_id: &str) -> Result<(), String> {
+        let url = format!("https://api.spotify.com/v1/playlists/{}/tracks", playlist_id);
+        let track_uri = if track_id.starts_with("spotify:track:") {
+            track_id.to_string()
+        } else {
+            format!("spotify:track:{}", track_id)
+        };
+        let body = serde_json::json!({
+            "uris": [track_uri]
+        });
+        info!("[API] Adding track {} to playlist {}", track_id, playlist_id);
+        let res = self.client.post(&url)
+            .bearer_auth(&self.access_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+        if res.status().is_success() {
+            info!("[API SUCCESS] Track added to playlist");
+            Ok(())
+        } else {
+            let err = res.text().await.unwrap_or_default();
+            Err(format!("Error adding to playlist: {}", err))
+        }
+    }
+
+    pub async fn save_track(&self, track_id: &str) -> Result<(), String> {
+        let url = format!("https://api.spotify.com/v1/me/tracks?ids={}", track_id);
+        info!("[API] Saving track to Liked Songs: {}", track_id);
+        let res = self.client.put(&url)
+            .bearer_auth(&self.access_token)
+            .header("Content-Length", 0)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+        if res.status().is_success() {
+            info!("[API SUCCESS] Track saved to Liked Songs");
+            Ok(())
+        } else {
+            Err(format!("Error saving track: {}", res.status()))
+        }
+    }
+
+    pub async fn remove_track(&self, track_id: &str) -> Result<(), String> {
+        let url = format!("https://api.spotify.com/v1/me/tracks?ids={}", track_id);
+        info!("[API] Removing track from Liked Songs: {}", track_id);
+        let res = self.client.delete(&url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+        if res.status().is_success() {
+            info!("[API SUCCESS] Track removed from Liked Songs");
+            Ok(())
+        } else {
+            Err(format!("Error removing track: {}", res.status()))
+        }
+    }
+
+    pub async fn create_playlist(&self, name: &str) -> Result<SimplePlaylist, String> {
+        let url = "https://api.spotify.com/v1/me/playlists";
+        let body = serde_json::json!({
+            "name": name,
+            "public": false,
+            "description": "Создано в SpotifyLight"
+        });
+        info!("[API] Creating new playlist: '{}'", name);
+        let res = self.client.post(url)
+            .bearer_auth(&self.access_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+        if res.status().is_success() {
+            let json: serde_json::Value = res.json().await.map_err(|e| format!("JSON error: {}", e))?;
+            let id = json.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let title = json.get("name").and_then(|v| v.as_str()).unwrap_or(name).to_string();
+            info!("[API SUCCESS] Playlist created with id: {}", id);
+            Ok(SimplePlaylist {
+                id,
+                title,
+                subtitle: "Плейлист • Вы".to_string(),
+                track_count: 0,
+            })
+        } else {
+            let err = res.text().await.unwrap_or_default();
+            Err(format!("Error creating playlist: {}", err))
+        }
+    }
+
+    pub async fn delete_playlist(&self, playlist_id: &str) -> Result<(), String> {
+        let url = format!("https://api.spotify.com/v1/playlists/{}/followers", playlist_id);
+        info!("[API] Unfollowing/deleting playlist: {}", playlist_id);
+        let res = self.client.delete(&url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+        if res.status().is_success() {
+            info!("[API SUCCESS] Playlist unfollowed/deleted");
+            Ok(())
+        } else {
+            Err(format!("Error deleting playlist: {}", res.status()))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SearchResult {
+    pub tracks: Vec<SimpleTrack>,
+    pub artists: Vec<SimplePlaylist>,
+    pub albums: Vec<SimplePlaylist>,
+    pub playlists: Vec<SimplePlaylist>,
 }

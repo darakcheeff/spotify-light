@@ -4,6 +4,9 @@ struct MixCard {
     title: string,
     subtitle: string,
     color: color,
+    text_color: color,
+    badge_color: color,
+    icon_str: string,
 }
 
 export component HomeView inherits Rectangle {
@@ -18,14 +21,14 @@ export component HomeView inherits Rectangle {
     callback login_clicked();
 
     property <[MixCard]> daily_mixes: [
-        { title: "Микс дня #1", subtitle: "Ундервуд, БИРТМАН, Мельница и не только", color: #006450 },
-        { title: "Микс дня #2", subtitle: "Airbourne, Dogma, Halestorm и не только", color: #e91429 },
-        { title: "Микс дня #3", subtitle: "Йорш, Порнофильмы, Другой Ветер и не только", color: #8400e7 },
-        { title: "Микс дня #4", subtitle: "Plamenev, Марко Поло, Louna и не только", color: #e1306c }
+        { title: "Микс дня #1", subtitle: "Ундервуд, БИРТМАН, Мельница и не только", color: #1e3a5f, text_color: #000000, badge_color: #14d8cc, icon_str: "🎸" },
+        { title: "Микс дня #2", subtitle: "Airbourne, Dogma, Halestorm и не только", color: #4a1525, text_color: #000000, badge_color: #f59b23, icon_str: "⚡" },
+        { title: "Микс дня #3", subtitle: "Йорш, Порнофильмы, Другой Ветер и не только", color: #3b1b54, text_color: #ffffff, badge_color: #ff4632, icon_str: "🔥" },
+        { title: "Микс дня #4", subtitle: "Plamenev, Марко Поло, Louna и не только", color: #1e453e, text_color: #ffffff, badge_color: #b02897, icon_str: "✨" }
     ];
 
     Flickable {
-        content-height: 950px;
+        content-height: 980px;
 
         VerticalLayout {
             padding-left: 24px;
@@ -113,7 +116,7 @@ export component HomeView inherits Rectangle {
                 }
             }
 
-            // 3. Quick Access 2x4 Grid (matching official Spotify Desktop 5.png)
+            // 3. Quick Access 2x4 Grid (matching official Spotify Desktop 5.png & 9.png)
             if root.is_authenticated && root.playlists.length > 0 : VerticalLayout {
                 spacing: 12px;
 
@@ -125,6 +128,9 @@ export component HomeView inherits Rectangle {
                         property <int> p_idx: row_idx * 4 + col_idx;
                         property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false };
                         property <bool> is_valid: pl.id != "";
+                        property <bool> is_liked_folder: pl.title.contains("Любимые") || pl.title.contains("Liked");
+                        property <bool> is_killshot: pl.title.contains("Killshot");
+                        property <bool> is_offline: pl.title.contains("Оффлайн");
 
                         horizontal-stretch: 1;
                         height: 58px;
@@ -137,17 +143,20 @@ export component HomeView inherits Rectangle {
                             spacing: 12px;
                             alignment: center;
 
-                            // Left square artwork
+                            // Left square artwork with authentic badges
                             Rectangle {
                                 width: 58px;
                                 height: 58px;
                                 border-radius: 4px;
-                                background: @linear-gradient(135deg, #4a148c 0%, #1e1b4b 100%);
+                                background: is_liked_folder ? @linear-gradient(135deg, #450af5 0%, #8e8ee5 100%) :
+                                            (is_killshot ? @linear-gradient(135deg, #ff007f 0%, #330066 100%) :
+                                            (is_offline ? @linear-gradient(135deg, #b91c1c 0%, #450a0a 100%) :
+                                            @linear-gradient(135deg, #1e3a8a 0%, #172554 100%)));
 
                                 Text {
-                                    text: "♪";
+                                    text: is_liked_folder ? "♥" : (is_killshot ? "🎯" : (is_offline ? "📥" : "♪"));
                                     color: #ffffff;
-                                    font-size: 24px;
+                                    font-size: is_liked_folder ? 22px : 20px;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
@@ -189,7 +198,7 @@ export component HomeView inherits Rectangle {
                 }
             }
 
-            // 4. Section "Для тебя" (Daily Mixes / Recommendations matching 5.png)
+            // 4. Section "Для тебя" (Daily Mixes / Recommendations matching 5.png & 9.png)
             if root.is_authenticated : VerticalLayout {
                 spacing: 14px;
 
@@ -217,7 +226,7 @@ export component HomeView inherits Rectangle {
 
                     for mix in root.daily_mixes : Rectangle {
                         horizontal-stretch: 1;
-                        height: 240px;
+                        height: 250px;
                         border-radius: Theme.radius-medium;
                         background: mix_touch.has-hover ? #242424 : #181818;
 
@@ -226,29 +235,47 @@ export component HomeView inherits Rectangle {
                             spacing: 10px;
                             alignment: start;
 
-                            // Artwork box with banner
+                            // Artwork box with authentic Daily Mix design
                             Rectangle {
                                 horizontal-stretch: 1;
-                                height: 140px;
+                                height: 150px;
                                 border-radius: 6px;
                                 background: mix.color;
+                                clip: true;
 
+                                // Subtle watermark icon in background
+                                Text {
+                                    x: (parent.width - 60px) / 2;
+                                    y: 20px;
+                                    text: mix.icon_str;
+                                    font-size: 50px;
+                                }
+
+                                // Spotify logo on top-left
                                 Text {
                                     x: 10px;
-                                    y: 10px;
+                                    y: 8px;
                                     text: "SPOTIFY";
-                                    color: #00000055;
+                                    color: #ffffff99;
                                     font-size: 10px;
                                     font-weight: 900;
                                 }
 
-                                Text {
-                                    x: 10px;
-                                    y: parent.height - 30px;
-                                    text: mix.title;
-                                    color: #ffffff;
-                                    font-size: 16px;
-                                    font-weight: 800;
+                                // Bottom colored badge strip matching 9.png
+                                Rectangle {
+                                    y: parent.height - 28px;
+                                    width: parent.width;
+                                    height: 28px;
+                                    background: mix.badge_color;
+
+                                    Text {
+                                        x: 8px;
+                                        y: 5px;
+                                        text: mix.title;
+                                        color: mix.text_color;
+                                        font-size: 12px;
+                                        font-weight: 800;
+                                    }
                                 }
                             }
 
@@ -279,7 +306,7 @@ export component HomeView inherits Rectangle {
                 }
             }
 
-            // 5. Section "Недавние" (Recent library items matching 5.png)
+            // 5. Section "Недавние" (Recent library items matching 5.png & 9.png)
             if root.is_authenticated && root.playlists.length > 4 : VerticalLayout {
                 spacing: 14px;
 
@@ -309,9 +336,10 @@ export component HomeView inherits Rectangle {
                         property <int> p_idx: idx + 4;
                         property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false };
                         property <bool> is_valid: pl.id != "";
+                        property <bool> is_liked: pl.title.contains("Любимые");
 
                         horizontal-stretch: 1;
-                        height: 240px;
+                        height: 250px;
                         border-radius: Theme.radius-medium;
                         background: rec_touch.has-hover ? #242424 : #181818;
                         visible: is_valid;
@@ -324,16 +352,34 @@ export component HomeView inherits Rectangle {
                             // Artwork box
                             Rectangle {
                                 horizontal-stretch: 1;
-                                height: 140px;
+                                height: 150px;
                                 border-radius: 6px;
-                                background: #282828;
+                                background: is_liked ? @linear-gradient(135deg, #450af5 0%, #8e8ee5 100%) : #282828;
 
                                 Text {
-                                    text: "♪";
-                                    color: Theme.accent;
-                                    font-size: 32px;
+                                    text: is_liked ? "♥" : "♪";
+                                    color: is_liked ? #ffffff : Theme.accent;
+                                    font-size: 36px;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
+                                }
+
+                                // Radio badge if it's a radio playlist
+                                if pl.title.contains("радио") || pl.title.contains("Radio") : Rectangle {
+                                    x: parent.width - 56px;
+                                    y: 8px;
+                                    width: 48px;
+                                    height: 18px;
+                                    border-radius: 3px;
+                                    background: #000000aa;
+                                    Text {
+                                        text: "РАДИО";
+                                        color: #ffffff;
+                                        font-size: 9px;
+                                        font-weight: 800;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
                                 }
                             }
 

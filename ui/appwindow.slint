@@ -6,11 +6,12 @@ import { RightDrawer } from "components/right_drawer.slint";
 import { HomeView } from "components/home_view.slint";
 import { AlbumView } from "components/album_view.slint";
 import { BrowseView } from "components/browse_view.slint";
+import { SettingsView } from "components/settings_view.slint";
 import { LyricsView } from "components/lyrics_view.slint";
 import { LoginDialog } from "components/login_dialog.slint";
 
 export component AppWindow inherits Window {
-    title: "SpotifyLight";
+    title: "spotify-light";
     icon: @image-url("../assets/icon.png");
     min-width: 960px;
     min-height: 640px;
@@ -21,10 +22,11 @@ export component AppWindow inherits Window {
 
     in-out property <bool> is_authenticated: false;
     in-out property <string> user_display_name: "";
+    in-out property <string> user_initial: "L";
     in-out property <string> auth_error: "";
     in-out property <bool> auth_loading: false;
 
-    in-out property <int> current_workspace: 0; // 0: Home, 1: Album/Playlist, 2: Browse
+    in-out property <int> current_workspace: 0; // 0: Home, 1: Album/Playlist, 2: Browse, 3: Settings
     in-out property <bool> is_lyrics_open: false;
     in-out property <bool> is_drawer_open: false;
     in-out property <int> drawer_mode: 0; // 0: Queue, 1: Connect Devices
@@ -64,15 +66,17 @@ export component AppWindow inherits Window {
     callback login_requested(string, string);
     callback otp_submitted(string, string);
     callback browser_login_requested();
+    callback logout_requested();
 
     VerticalLayout {
         padding: 0px;
         spacing: 0px;
 
-        // 1. Top Navigation Bar
+        // 1. Top Navigation Bar (Centered search, authentic browse drawer icon, profile menu)
         TopBar {
             is_authenticated: root.is_authenticated;
             user_name: root.user_display_name;
+            user_initial: root.user_initial;
             is_home_active: root.current_workspace == 0;
             nav_back => {
                 if root.current_workspace > 0 {
@@ -87,11 +91,20 @@ export component AppWindow inherits Window {
                 root.current_workspace = 2;
                 root.is_lyrics_open = false;
             }
+            open_settings => {
+                root.current_workspace = 3;
+                root.is_lyrics_open = false;
+            }
             search_changed(query) => {
                 root.search_query(query);
             }
             profile_clicked => {
-                root.is_login_open = true;
+                if !root.is_authenticated {
+                    root.is_login_open = true;
+                }
+            }
+            logout_clicked => {
+                root.logout_requested();
             }
         }
 
@@ -120,8 +133,6 @@ export component AppWindow inherits Window {
             }
 
             // Central Workspace Stack
-            // Using visible property instead of 'if' prevents destruction of views,
-            // preserving scroll offsets, user inputs, and avoiding reallocation churn!
             Rectangle {
                 horizontal-stretch: 1;
                 border-radius: Theme.radius-medium;
@@ -132,7 +143,7 @@ export component AppWindow inherits Window {
                     close_lyrics => { root.is_lyrics_open = false; }
                 }
 
-                // View 2: Home Catalog (matching 5.png)
+                // View 2: Home Catalog (matching 5.png & 9.png)
                 if !root.is_lyrics_open && root.current_workspace == 0 : HomeView {
                     is_authenticated: root.is_authenticated;
                     playlists: root.user_playlists;
@@ -159,6 +170,13 @@ export component AppWindow inherits Window {
                 if !root.is_lyrics_open && root.current_workspace == 2 : BrowseView {
                     category_clicked(name) => {
                         root.search_query(name);
+                    }
+                }
+
+                // View 5: Settings / Настройки View with Equalizer (matching 10.png - 14.png)
+                if !root.is_lyrics_open && root.current_workspace == 3 : SettingsView {
+                    eq_changed(band, db) => {
+                        // Forward to audio engine if needed
                     }
                 }
             }

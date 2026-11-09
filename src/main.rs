@@ -2,6 +2,7 @@ mod api;
 mod audio;
 mod discovery;
 mod mpris;
+mod tray;
 
 slint::include_modules!();
 
@@ -56,6 +57,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build Slint UI
     let app = AppWindow::new()?;
     let app_weak = app.as_weak();
+
+    // Spawn Desktop System Tray (StatusNotifierItem on D-Bus)
+    let tray_weak = app_weak.clone();
+    tokio::spawn(async move {
+        if let Err(e) = tray::start_tray(tray_weak).await {
+            warn!("[TRAY] Note: could not register tray service: {}", e);
+        }
+    });
 
     // Shared Spotify Web API client state
     let active_api_client: Arc<Mutex<Option<SpotifyApiClient>>> = Arc::new(Mutex::new(None));
@@ -224,6 +233,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Auth Callback: Logout Requested
+    app.on_logout_requested({
+        let app_weak = app_weak.clone();
+        let api_client_lock = Arc::clone(&active_api_client);
+        let engine = audio_sender.clone();
+        move || {
+            info!("[UI ACTION] Logout requested by user. Resetting session and credentials.");
+            clear_saved_credentials();
+            let api_client_lock = Arc::clone(&api_client_lock);
+            let engine = engine.clone();
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                {
+                    let mut guard = api_client_lock.lock().await;
+                    *guard = None;
+                }
+                engine.send_command(AudioCommand::Stop).await;
+                let _ = app_weak.upgrade_in_event_loop(|ui| {
+                    ui.set_is_authenticated(false);
+                    ui.set_user_display_name("".into());
+                    ui.set_user_initial("L".into());
+                    ui.set_current_workspace(0);
+                    ui.set_is_login_open(true);
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(vec![])));
+                    ui.set_current_tracks(ModelRc::new(VecModel::from(vec![])));
+                });
+            });
+        }
+    });
+
     // Auth Callback: Email submitted (pre-flight check)
     app.on_email_submitted(move |email| {
         info!("[UI ACTION] Email entered in login dialog: {}", email);
@@ -309,6 +348,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             ui.set_auth_error("".into());
                             ui.set_is_authenticated(true);
                             ui.set_is_login_open(false);
+                            let init = disp.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_ascii_uppercase().to_string()).unwrap_or_else(|| "L".into());
+                            ui.set_user_initial(init.into());
                             ui.set_user_display_name(disp.into());
                         });
                     }
@@ -372,6 +413,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             ui.set_auth_error("".into());
                             ui.set_is_authenticated(true);
                             ui.set_is_login_open(false);
+                            let init = u_name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_ascii_uppercase().to_string()).unwrap_or_else(|| "L".into());
+                            ui.set_user_initial(init.into());
                             ui.set_user_display_name(u_name.into());
                         });
 
@@ -381,6 +424,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         tokio::spawn(async move {
                             if let Ok(name) = client_profile.get_current_user().await {
                                 let _ = app_weak_profile.upgrade_in_event_loop(move |ui| {
+                                    let init = name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_ascii_uppercase().to_string()).unwrap_or_else(|| "L".into());
+                                    ui.set_user_initial(init.into());
                                     ui.set_user_display_name(name.into());
                                 });
                             }
@@ -518,6 +563,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_is_authenticated(true);
                             ui.set_is_login_open(false);
+                            let init = u_name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_ascii_uppercase().to_string()).unwrap_or_else(|| "L".into());
+                            ui.set_user_initial(init.into());
                             ui.set_user_display_name(u_name.into());
                         });
 
@@ -527,6 +574,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         tokio::spawn(async move {
                             if let Ok(name) = client_profile.get_current_user().await {
                                 let _ = app_weak_profile.upgrade_in_event_loop(move |ui| {
+                                    let init = name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_ascii_uppercase().to_string()).unwrap_or_else(|| "L".into());
+                                    ui.set_user_initial(init.into());
                                     ui.set_user_display_name(name.into());
                                 });
                             }

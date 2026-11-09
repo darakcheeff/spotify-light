@@ -1,0 +1,823 @@
+import { Theme } from "../theme.slint";
+
+component ToggleSwitch inherits Rectangle {
+    in-out property <bool> checked: false;
+    callback toggled(bool);
+
+    width: 42px;
+    height: 24px;
+    border-radius: 12px;
+    background: root.checked ? #1db954 : #535353;
+    animate background { duration: 120ms; }
+
+    Rectangle {
+        x: root.checked ? parent.width - self.width - 3px : 3px;
+        y: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: #ffffff;
+        animate x { duration: 120ms; easing: ease-out; }
+    }
+
+    TouchArea {
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}
+
+export component SettingsView inherits Rectangle {
+    background: Theme.background;
+
+    // Equalizer 6-band gains in dB (-12 to +12)
+    in-out property <float> eq_60: 0.0;
+    in-out property <float> eq_150: 0.0;
+    in-out property <float> eq_400: 0.0;
+    in-out property <float> eq_1k: 0.0;
+    in-out property <float> eq_2k4: 0.0;
+    in-out property <float> eq_15k: 0.0;
+
+    in-out property <string> active_preset: "Нейтральный режим";
+    in-out property <bool> eq_enabled: true;
+    in-out property <bool> minimize_on_close: true;
+
+    callback eq_changed(int, float); // band index, dB value
+    callback reset_eq();
+
+    Flickable {
+        content-height: 1450px;
+
+        VerticalLayout {
+            padding-left: 32px;
+            padding-right: 32px;
+            padding-top: 24px;
+            padding-bottom: 60px;
+            spacing: 28px;
+            alignment: start;
+
+            // Header: "Настройки" + Search Icon
+            HorizontalLayout {
+                alignment: center;
+
+                Text {
+                    text: "Настройки";
+                    color: Theme.text-primary;
+                    font-size: 32px;
+                    font-weight: 800;
+                    horizontal-stretch: 1;
+                    vertical-alignment: center;
+                }
+
+                Rectangle {
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 18px;
+                    background: search_touch.has-hover ? #2a2a2a : transparent;
+
+                    Text {
+                        text: "🔍";
+                        font-size: 18px;
+                        color: Theme.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    search_touch := TouchArea {}
+                }
+            }
+
+            // Section: Аккаунт
+            VerticalLayout {
+                spacing: 12px;
+                Text {
+                    text: "Аккаунт";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Изменить способы входа";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+
+                    Rectangle {
+                        width: 110px;
+                        height: 34px;
+                        border-radius: 17px;
+                        border-width: 1px;
+                        border-color: #727272;
+                        background: acc_btn.has-hover ? #2a2a2a : transparent;
+
+                        Text {
+                            text: "Изменить ↗";
+                            color: Theme.text-primary;
+                            font-size: 13px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        acc_btn := TouchArea {}
+                    }
+                }
+            }
+
+            // Section: Воспроизведение (Playback & Equalizer)
+            VerticalLayout {
+                spacing: 16px;
+
+                Text {
+                    text: "Воспроизведение";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+
+                // Row: Плавный переход между треками
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Плавный переход между треками";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch { checked: false; }
+                }
+
+                // Row: Без пауз
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Без пауз";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch { checked: true; }
+                }
+
+                // Row: Автомикс
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Автомикс: включи плавные переходы между треками в ряде плейлистов";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch { checked: true; }
+                }
+
+                // Row: Умное перемешивание
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Добавить Умное перемешивание в режимы воспроизведения. Если отключить эту настройку, Умное перемешивание будет недоступно.";
+                        color: Theme.text-secondary;
+                        font-size: 13px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+                    ToggleSwitch { checked: true; }
+                }
+
+                // Row: Установить одну громкость
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Установить одну громкость для всех треков и подкастов";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch { checked: true; }
+                }
+
+                // Row: Уровень громкости
+                HorizontalLayout {
+                    alignment: center;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 4px;
+                        Text {
+                            text: "Настрой уровень громкости в зависимости от шума вокруг.";
+                            color: Theme.text-secondary;
+                            font-size: 13px;
+                        }
+                    }
+                    Rectangle {
+                        width: 130px;
+                        height: 32px;
+                        border-radius: 4px;
+                        background: #242424;
+                        Text {
+                            text: "Нормально ˅";
+                            color: Theme.text-primary;
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Row: Монозвук
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Монозвук — одинаковое воспроизведение звука в правом и левом динамике";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch { checked: false; }
+                }
+
+                // Row: Эквалайзер
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Эквалайзер";
+                        color: Theme.text-primary;
+                        font-size: 15px;
+                        font-weight: 600;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch {
+                        checked <=> root.eq_enabled;
+                    }
+                }
+
+                // Equalizer Card (Matching 10.png exactly)
+                if root.eq_enabled : Rectangle {
+                    height: 280px;
+                    border-radius: 8px;
+                    background: #181818;
+                    border-width: 1px;
+                    border-color: #282828;
+
+                    VerticalLayout {
+                        padding: 20px;
+                        spacing: 16px;
+
+                        // Top Preset Row
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 12px;
+
+                            Text {
+                                text: "Эффекты";
+                                color: Theme.text-secondary;
+                                font-size: 14px;
+                                vertical-alignment: center;
+                            }
+
+                            Rectangle {
+                                width: 180px;
+                                height: 32px;
+                                border-radius: 4px;
+                                background: #242424;
+
+                                Text {
+                                    text: root.active_preset + " ˅";
+                                    color: Theme.text-primary;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                TouchArea {
+                                    clicked => {
+                                        if root.active_preset == "Нейтральный режим" {
+                                            root.active_preset = "Усиление басов";
+                                            root.eq_60 = 6.0;
+                                            root.eq_150 = 5.0;
+                                            root.eq_400 = 2.0;
+                                            root.eq_1k = 0.0;
+                                            root.eq_2k4 = 0.0;
+                                            root.eq_15k = 0.0;
+                                        } else if root.active_preset == "Усиление басов" {
+                                            root.active_preset = "Рок";
+                                            root.eq_60 = 5.0;
+                                            root.eq_150 = 3.0;
+                                            root.eq_400 = -1.0;
+                                            root.eq_1k = 1.0;
+                                            root.eq_2k4 = 3.0;
+                                            root.eq_15k = 5.0;
+                                        } else if root.active_preset == "Рок" {
+                                            root.active_preset = "Электронная музыка";
+                                            root.eq_60 = 5.0;
+                                            root.eq_150 = 4.0;
+                                            root.eq_400 = 0.0;
+                                            root.eq_1k = 2.0;
+                                            root.eq_2k4 = 4.0;
+                                            root.eq_15k = 5.0;
+                                        } else {
+                                            root.active_preset = "Нейтральный режим";
+                                            root.eq_60 = 0.0;
+                                            root.eq_150 = 0.0;
+                                            root.eq_400 = 0.0;
+                                            root.eq_1k = 0.0;
+                                            root.eq_2k4 = 0.0;
+                                            root.eq_15k = 0.0;
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle { horizontal-stretch: 1; }
+                        }
+
+                        // Equalizer Interactive Curve & Graph Area
+                        Rectangle {
+                            height: 140px;
+                            background: transparent;
+
+                            // Left dB indicators (+12dB, -12dB)
+                            Text {
+                                x: 4px;
+                                y: 4px;
+                                text: "+12dB";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                            }
+
+                            Text {
+                                x: 4px;
+                                y: parent.height - 38px;
+                                text: "-12dB";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                            }
+
+                            // 0dB Center subtle reference line
+                            Rectangle {
+                                x: 50px;
+                                y: 55px;
+                                width: parent.width - 60px;
+                                height: 1px;
+                                background: #282828;
+                            }
+
+                            // 6 Band vertical sliders & curve nodes
+                            HorizontalLayout {
+                                x: 50px;
+                                width: parent.width - 60px;
+                                height: parent.height;
+                                spacing: 0px;
+
+                                // Helper band 0: 60Hz
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    height: parent.height;
+                                    property <float> val: root.eq_60;
+
+                                    // Vertical dashed guide line
+                                    Rectangle {
+                                        x: (parent.width - 1px) / 2;
+                                        y: 10px;
+                                        width: 1px;
+                                        height: 90px;
+                                        background: #252525;
+                                    }
+
+                                    // White Node Knob
+                                    Rectangle {
+                                        x: (parent.width - 12px) / 2;
+                                        y: 55px - (root.eq_60 / 12.0) * 45px - 6px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: #ffffff;
+                                        border-width: 2px;
+                                        border-color: #1db954;
+                                    }
+
+                                    // Frequency Label
+                                    Text {
+                                        y: parent.height - 24px;
+                                        width: parent.width;
+                                        text: "60Hz";
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    TouchArea {
+                                        clicked => {
+                                            root.eq_60 = root.eq_60 == 0.0 ? 4.0 : 0.0;
+                                            root.eq_changed(0, root.eq_60);
+                                        }
+                                    }
+                                }
+
+                                // Helper band 1: 150Hz
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    height: parent.height;
+                                    property <float> val: root.eq_150;
+
+                                    Rectangle {
+                                        x: (parent.width - 1px) / 2;
+                                        y: 10px;
+                                        width: 1px;
+                                        height: 90px;
+                                        background: #252525;
+                                    }
+
+                                    Rectangle {
+                                        x: (parent.width - 12px) / 2;
+                                        y: 55px - (root.eq_150 / 12.0) * 45px - 6px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: #ffffff;
+                                        border-width: 2px;
+                                        border-color: #1db954;
+                                    }
+
+                                    Text {
+                                        y: parent.height - 24px;
+                                        width: parent.width;
+                                        text: "150Hz";
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    TouchArea {
+                                        clicked => {
+                                            root.eq_150 = root.eq_150 == 0.0 ? 3.0 : 0.0;
+                                            root.eq_changed(1, root.eq_150);
+                                        }
+                                    }
+                                }
+
+                                // Helper band 2: 400Hz
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    height: parent.height;
+                                    property <float> val: root.eq_400;
+
+                                    Rectangle {
+                                        x: (parent.width - 1px) / 2;
+                                        y: 10px;
+                                        width: 1px;
+                                        height: 90px;
+                                        background: #252525;
+                                    }
+
+                                    Rectangle {
+                                        x: (parent.width - 12px) / 2;
+                                        y: 55px - (root.eq_400 / 12.0) * 45px - 6px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: #ffffff;
+                                        border-width: 2px;
+                                        border-color: #1db954;
+                                    }
+
+                                    Text {
+                                        y: parent.height - 24px;
+                                        width: parent.width;
+                                        text: "400Hz";
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    TouchArea {
+                                        clicked => {
+                                            root.eq_400 = root.eq_400 == 0.0 ? 2.0 : 0.0;
+                                            root.eq_changed(2, root.eq_400);
+                                        }
+                                    }
+                                }
+
+                                // Helper band 3: 1KHz
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    height: parent.height;
+                                    property <float> val: root.eq_1k;
+
+                                    Rectangle {
+                                        x: (parent.width - 1px) / 2;
+                                        y: 10px;
+                                        width: 1px;
+                                        height: 90px;
+                                        background: #252525;
+                                    }
+
+                                    Rectangle {
+                                        x: (parent.width - 12px) / 2;
+                                        y: 55px - (root.eq_1k / 12.0) * 45px - 6px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: #ffffff;
+                                        border-width: 2px;
+                                        border-color: #1db954;
+                                    }
+
+                                    Text {
+                                        y: parent.height - 24px;
+                                        width: parent.width;
+                                        text: "1KHz";
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    TouchArea {
+                                        clicked => {
+                                            root.eq_1k = root.eq_1k == 0.0 ? 2.0 : 0.0;
+                                            root.eq_changed(3, root.eq_1k);
+                                        }
+                                    }
+                                }
+
+                                // Helper band 4: 2.4KHz
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    height: parent.height;
+                                    property <float> val: root.eq_2k4;
+
+                                    Rectangle {
+                                        x: (parent.width - 1px) / 2;
+                                        y: 10px;
+                                        width: 1px;
+                                        height: 90px;
+                                        background: #252525;
+                                    }
+
+                                    Rectangle {
+                                        x: (parent.width - 12px) / 2;
+                                        y: 55px - (root.eq_2k4 / 12.0) * 45px - 6px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: #ffffff;
+                                        border-width: 2px;
+                                        border-color: #1db954;
+                                    }
+
+                                    Text {
+                                        y: parent.height - 24px;
+                                        width: parent.width;
+                                        text: "2.4KHz";
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    TouchArea {
+                                        clicked => {
+                                            root.eq_2k4 = root.eq_2k4 == 0.0 ? 3.0 : 0.0;
+                                            root.eq_changed(4, root.eq_2k4);
+                                        }
+                                    }
+                                }
+
+                                // Helper band 5: 15KHz
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    height: parent.height;
+                                    property <float> val: root.eq_15k;
+
+                                    Rectangle {
+                                        x: (parent.width - 1px) / 2;
+                                        y: 10px;
+                                        width: 1px;
+                                        height: 90px;
+                                        background: #252525;
+                                    }
+
+                                    Rectangle {
+                                        x: (parent.width - 12px) / 2;
+                                        y: 55px - (root.eq_15k / 12.0) * 45px - 6px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: #ffffff;
+                                        border-width: 2px;
+                                        border-color: #1db954;
+                                    }
+
+                                    Text {
+                                        y: parent.height - 24px;
+                                        width: parent.width;
+                                        text: "15KHz";
+                                        color: Theme.text-secondary;
+                                        font-size: 11px;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    TouchArea {
+                                        clicked => {
+                                            root.eq_15k = root.eq_15k == 0.0 ? 4.0 : 0.0;
+                                            root.eq_changed(5, root.eq_15k);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Bottom Row: "Сбросить" Button (matching 10.png)
+                        HorizontalLayout {
+                            alignment: end;
+                            Rectangle {
+                                width: 90px;
+                                height: 32px;
+                                border-radius: 16px;
+                                background: rst_btn.has-hover ? #383838 : #282828;
+
+                                Text {
+                                    text: "Сбросить";
+                                    color: Theme.text-primary;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                rst_btn := TouchArea {
+                                    clicked => {
+                                        root.active_preset = "Нейтральный режим";
+                                        root.eq_60 = 0.0;
+                                        root.eq_150 = 0.0;
+                                        root.eq_400 = 0.0;
+                                        root.eq_1k = 0.0;
+                                        root.eq_2k4 = 0.0;
+                                        root.eq_15k = 0.0;
+                                        root.reset_eq();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section: Перемешивание (matching 10.png)
+            VerticalLayout {
+                spacing: 12px;
+                Text {
+                    text: "Перемешивание";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Выбери способ перемешивания.";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    Rectangle {
+                        width: 250px;
+                        height: 32px;
+                        border-radius: 4px;
+                        background: #242424;
+                        Text {
+                            text: "С меньшим количеством повторов ˅";
+                            color: Theme.text-primary;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Section: Настройки запуска (matching 11.png)
+            VerticalLayout {
+                spacing: 12px;
+                Text {
+                    text: "Настройки запуска";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "При нажатии кнопки «Закрыть» сворачивать окно Spotify";
+                        color: Theme.text-secondary;
+                        font-size: 14px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    ToggleSwitch {
+                        checked <=> root.minimize_on_close;
+                    }
+                }
+            }
+
+            // Section: Хранилище (matching 11.png)
+            VerticalLayout {
+                spacing: 16px;
+                Text {
+                    text: "Хранилище";
+                    color: Theme.text-primary;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+
+                // Row: Скачанная музыка
+                HorizontalLayout {
+                    alignment: center;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        Text {
+                            text: "Скачанная музыка: 0 MB";
+                            color: Theme.text-primary;
+                            font-size: 14px;
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: "Весь контент, скачанный для прослушивания офлайн.";
+                            color: Theme.text-secondary;
+                            font-size: 12px;
+                        }
+                    }
+
+                    Rectangle {
+                        width: 200px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: #242424;
+                        Text {
+                            text: "Удалить весь скачанный контент";
+                            color: #6a6a6a;
+                            font-size: 11px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Row: Кеш
+                HorizontalLayout {
+                    alignment: center;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        Text {
+                            text: "Кеш: 10236 MB";
+                            color: Theme.text-primary;
+                            font-size: 14px;
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: "Временные файлы, которые Spotify хранит для более быстрой работы при медленном интернете.";
+                            color: Theme.text-secondary;
+                            font-size: 12px;
+                        }
+                    }
+
+                    Rectangle {
+                        width: 120px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: clr_btn.has-hover ? #383838 : #282828;
+
+                        Text {
+                            text: "Очистить кеш";
+                            color: Theme.text-primary;
+                            font-size: 12px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        clr_btn := TouchArea {}
+                    }
+                }
+            }
+        }
+    }
+}

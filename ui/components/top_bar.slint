@@ -7,22 +7,27 @@ export component TopBar inherits Rectangle {
     in-out property <string> search_text: "";
     in-out property <bool> is_authenticated: false;
     in-out property <string> user_name: "";
+    in-out property <string> user_initial: "L";
     in-out property <bool> is_home_active: true;
+    in-out property <bool> is_menu_open: false;
     
     callback nav_back();
     callback nav_forward();
     callback nav_home();
     callback open_browse();
+    callback open_settings();
     callback search_changed(string);
     callback profile_clicked();
+    callback logout_clicked();
     callback notifications_clicked();
 
     HorizontalLayout {
         padding-left: 24px;
         padding-right: 24px;
         spacing: 16px;
+        alignment: center;
 
-        // Navigation History (Back / Forward)
+        // 1. Navigation History (Back / Forward)
         HorizontalLayout {
             spacing: 8px;
             alignment: center;
@@ -68,116 +73,148 @@ export component TopBar inherits Rectangle {
             }
         }
 
-        // Home button (matching official Spotify Desktop)
-        Rectangle {
-            width: 44px;
-            height: 44px;
-            border-radius: 22px;
-            background: home_touch.has-hover ? Theme.background-hover : (root.is_home_active ? #ffffff : Theme.background-elevated);
+        // Left Flexible Spacer (Guarantees center alignment of Search Bar)
+        Rectangle { horizontal-stretch: 1; }
 
-            Text {
-                text: "⌂";
-                color: (root.is_home_active && !home_touch.has-hover) ? #000000 : Theme.text-primary;
-                font-size: 26px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
+        // 2. Centered Group: Home Button + Search / Browse Capsule (matching 9.png)
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: center;
 
-            home_touch := TouchArea {
-                clicked => { root.nav_home(); }
-            }
-        }
-
-        // Search Bar with Integrated Browse ("Обзор") Button
-        Rectangle {
-            width: 440px;
-            height: 44px;
-            border-radius: 22px;
-            background: Theme.background-elevated;
-            border-width: 1px;
-            border-color: search_input.has-focus ? Theme.text-primary : Theme.border-color;
-
-            HorizontalLayout {
-                padding-left: 16px;
-                padding-right: 8px;
-                spacing: 8px;
-                alignment: center;
+            // Circular Home button
+            Rectangle {
+                width: 48px;
+                height: 48px;
+                border-radius: 24px;
+                background: home_touch.has-hover ? Theme.background-hover : (root.is_home_active ? #ffffff : #1f1f1f);
 
                 Text {
-                    text: "🔍";
-                    font-size: 16px;
+                    text: "⌂";
+                    color: (root.is_home_active && !home_touch.has-hover) ? #000000 : #ffffff;
+                    font-size: 26px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
                     vertical-alignment: center;
                 }
 
-                // Input & Placeholder Area
-                Rectangle {
-                    horizontal-stretch: 1;
-                    height: 36px;
+                home_touch := TouchArea {
+                    clicked => { root.nav_home(); }
+                }
+            }
 
-                    if root.search_text == "" : Text {
-                        text: "Что хочешь включить?";
-                        color: Theme.text-muted;
-                        font-size: 14px;
+            // Rounded Search Capsule with integrated Browse drawer icon
+            Rectangle {
+                width: 460px;
+                height: 48px;
+                border-radius: 24px;
+                background: #1f1f1f;
+                border-width: 1px;
+                border-color: search_input.has-focus ? #ffffff : #2a2a2a;
+
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 14px;
+                    spacing: 10px;
+                    alignment: center;
+
+                    // Search Magnifying Glass
+                    Text {
+                        text: "🔍";
+                        font-size: 15px;
+                        color: #b3b3b3;
                         vertical-alignment: center;
-                        x: 0px;
                     }
 
-                    search_input := TextInput {
-                        width: parent.width;
-                        height: parent.height;
-                        text <=> root.search_text;
-                        color: Theme.text-primary;
-                        font-size: 14px;
-                        vertical-alignment: center;
-                        edited => {
-                            root.search_changed(self.text);
+                    // Input & Placeholder
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        height: 38px;
+
+                        if root.search_text == "" : Text {
+                            text: "Что хочешь включить?";
+                            color: #8b8b8b;
+                            font-size: 14px;
+                            vertical-alignment: center;
+                            x: 0px;
+                        }
+
+                        search_input := TextInput {
+                            width: parent.width;
+                            height: parent.height;
+                            text <=> root.search_text;
+                            color: Theme.text-primary;
+                            font-size: 14px;
+                            vertical-alignment: center;
+                            edited => {
+                                root.search_changed(self.text);
+                            }
                         }
                     }
-                }
 
-                // Vertical Divider
-                Rectangle {
-                    width: 1px;
-                    height: 20px;
-                    background: #3e3e3e;
-                }
-
-                // Browse ("Обзор") Button
-                Rectangle {
-                    width: 36px;
-                    height: 36px;
-                    border-radius: 18px;
-                    background: browse_touch.has-hover ? #383838 : transparent;
-
-                    Text {
-                        text: "🗂";
-                        font-size: 18px;
-                        color: browse_touch.has-hover ? Theme.text-primary : Theme.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
+                    // Thin Vertical Separator
+                    Rectangle {
+                        width: 1px;
+                        height: 22px;
+                        background: #3e3e3e;
                     }
 
-                    browse_touch := TouchArea {
-                        clicked => { root.open_browse(); }
+                    // Authentic Spotify Drawer/Browse Icon (matching 9.png)
+                    Rectangle {
+                        width: 34px;
+                        height: 34px;
+                        border-radius: 17px;
+                        background: browse_touch.has-hover ? #2e2e2e : transparent;
+
+                        // Vector drawer / collection icon
+                        Rectangle {
+                            x: (parent.width - 20px) / 2;
+                            y: (parent.height - 16px) / 2;
+                            width: 20px;
+                            height: 16px;
+                            border-radius: 2px;
+                            border-width: 1.8px;
+                            border-color: browse_touch.has-hover ? #ffffff : #b3b3b3;
+
+                            // Middle shelf partition
+                            Rectangle {
+                                y: 7px;
+                                width: parent.width;
+                                height: 1.8px;
+                                background: browse_touch.has-hover ? #ffffff : #b3b3b3;
+                            }
+
+                            // Bottom drawer notch / handle
+                            Rectangle {
+                                y: 11px;
+                                x: (parent.width - 6px) / 2;
+                                width: 6px;
+                                height: 1.8px;
+                                border-radius: 1px;
+                                background: browse_touch.has-hover ? #ffffff : #b3b3b3;
+                            }
+                        }
+
+                        browse_touch := TouchArea {
+                            clicked => { root.open_browse(); }
+                        }
                     }
                 }
             }
         }
 
-        // Spacer
+        // Right Flexible Spacer (Guarantees center alignment of Search Bar)
         Rectangle { horizontal-stretch: 1; }
 
-        // Right side: Notifications, Profile / Login
+        // 3. Right Group: Notifications & Profile Avatar
         HorizontalLayout {
-            spacing: 12px;
+            spacing: 14px;
             alignment: center;
 
             if root.is_authenticated : Rectangle {
                 width: 36px;
                 height: 36px;
                 border-radius: 18px;
-                background: bell_touch.has-hover ? Theme.background-hover : transparent;
+                background: bell_touch.has-hover ? #2a2a2a : transparent;
                 
                 Text {
                     text: "🔔";
@@ -191,26 +228,29 @@ export component TopBar inherits Rectangle {
                 }
             }
 
-            // User Avatar when logged in
+            // User Avatar: Clean letter circle (no overflowing long text, matching 9.png)
             if root.is_authenticated : Rectangle {
                 width: 36px;
                 height: 36px;
                 border-radius: 18px;
-                background: #535353;
+                background: #c86432; // Spotify copper/orange avatar color
                 border-width: 2px;
-                border-color: avatar_touch.has-hover ? Theme.text-primary : transparent;
+                border-color: avatar_touch.has-hover ? #ffffff : transparent;
 
                 Text {
-                    text: root.user_name != "" ? root.user_name : "U";
-                    color: Theme.text-primary;
+                    text: root.user_initial;
+                    color: #ffffff;
                     font-size: 14px;
-                    font-weight: 700;
+                    font-weight: 800;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
 
                 avatar_touch := TouchArea {
-                    clicked => { root.profile_clicked(); }
+                    clicked => {
+                        root.is_menu_open = !root.is_menu_open;
+                        root.profile_clicked();
+                    }
                 }
             }
 
@@ -232,6 +272,174 @@ export component TopBar inherits Rectangle {
 
                 login_btn_touch := TouchArea {
                     clicked => { root.profile_clicked(); }
+                }
+            }
+        }
+    }
+
+    // Floating Profile Dropdown Menu (matching 9.png)
+    if root.is_menu_open : Rectangle {
+        x: parent.width - self.width - 20px;
+        y: 60px;
+        width: 196px;
+        height: 248px;
+        border-radius: 8px;
+        background: #282828;
+        border-width: 1px;
+        border-color: #383838;
+        z: 100;
+
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
+
+            // 1. Аккаунт ↗
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i1.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Аккаунт";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "↗";
+                        color: #b3b3b3;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
+                }
+                i1 := TouchArea { clicked => { root.is_menu_open = false; } }
+            }
+
+            // 2. Профиль
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i2.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Профиль";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i2 := TouchArea { clicked => { root.is_menu_open = false; } }
+            }
+
+            // 3. Недавнее
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i3.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Недавнее";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i3 := TouchArea { clicked => { root.is_menu_open = false; } }
+            }
+
+            // 4. Справка ↗
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i4.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Справка";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "↗";
+                        color: #b3b3b3;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
+                }
+                i4 := TouchArea { clicked => { root.is_menu_open = false; } }
+            }
+
+            // 5. Настройки
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i5.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Настройки";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i5 := TouchArea {
+                    clicked => {
+                        root.is_menu_open = false;
+                        root.open_settings();
+                    }
+                }
+            }
+
+            // Separator line
+            Rectangle {
+                height: 1px;
+                background: #3e3e3e;
+            }
+
+            // 6. Выйти
+            Rectangle {
+                height: 32px;
+                border-radius: 4px;
+                background: i6.has-hover ? #3e3e3e : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: center;
+                    Text {
+                        text: "Выйти";
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                }
+                i6 := TouchArea {
+                    clicked => {
+                        root.is_menu_open = false;
+                        root.logout_clicked();
+                    }
                 }
             }
         }

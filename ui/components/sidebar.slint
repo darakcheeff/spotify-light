@@ -115,13 +115,7 @@ export component Sidebar inherits Rectangle {
                 spacing: 4px;
 
                 for item in root.playlists : Rectangle {
-                    property <bool> matches_filter: root.selected_filter == 0 
-                        || (root.selected_filter == 1 && (item.item_type == 0 || item.item_type == 3 || item.item_type == 4))
-                        || (root.selected_filter == 2 && item.item_type == 1)
-                        || (root.selected_filter == 3 && item.item_type == 2);
-
-                    height: matches_filter ? 56px : 0px;
-                    visible: matches_filter;
+                    height: 56px;
                     border-radius: Theme.radius-small;
                     background: item.is_active ? Theme.background-elevated : (item_touch.has-hover ? Theme.background-hover : transparent);
 
@@ -135,11 +129,11 @@ export component Sidebar inherits Rectangle {
                             width: 44px;
                             height: 44px;
                             border-radius: item.item_type == 2 ? 22px : 4px;
-                            background: item.is_pinned ? #331f54 : #282828;
+                            background: item.item_type == 3 ? #4c1d95 : (item.item_type == 4 ? #312e81 : (item.item_type == 1 ? #1e293b : (item.is_pinned ? #331f54 : #282828)));
 
                             Text {
-                                text: item.is_pinned ? "♥" : "♪";
-                                color: item.is_pinned ? #a855f7 : Theme.text-secondary;
+                                text: item.item_type == 3 ? "♥" : (item.item_type == 2 ? "👤" : (item.item_type == 1 ? "💽" : (item.item_type == 4 ? "📻" : "♪")));
+                                color: item.item_type == 3 ? #f472b6 : (item.is_pinned ? #a855f7 : Theme.text-secondary);
                                 font-size: 18px;
                                 horizontal-alignment: center;
                                 vertical-alignment: center;

@@ -4,6 +4,7 @@ GenericName=Music Player
 Comment=Lightweight, native Spotify client for Linux
 Exec=spotify-light %U
 Icon=spotify-light
+StartupWMClass=spotify-light
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;

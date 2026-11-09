@@ -100,7 +100,9 @@ export component TopBar inherits Rectangle {
 
             // Rounded Search Capsule with integrated Browse drawer icon
             Rectangle {
-                width: 460px;
+                width: 480px;
+                min-width: 440px;
+                max-width: 520px;
                 height: 48px;
                 border-radius: 24px;
                 background: #1f1f1f;
@@ -125,6 +127,7 @@ export component TopBar inherits Rectangle {
                     Rectangle {
                         horizontal-stretch: 1;
                         height: 38px;
+                        clip: true;
 
                         if root.search_text == "" : Text {
                             text: "Что хочешь включить?";
@@ -150,6 +153,7 @@ export component TopBar inherits Rectangle {
                     // Thin Vertical Separator
                     Rectangle {
                         width: 1px;
+                        min-width: 1px;
                         height: 22px;
                         background: #3e3e3e;
                     }
@@ -157,6 +161,7 @@ export component TopBar inherits Rectangle {
                     // Authentic Spotify Drawer/Browse Icon (matching 9.png)
                     Rectangle {
                         width: 34px;
+                        min-width: 34px;
                         height: 34px;
                         border-radius: 17px;
                         background: browse_touch.has-hover ? #2e2e2e : transparent;

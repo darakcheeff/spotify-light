@@ -37,16 +37,15 @@ export component PlayerBar inherits Rectangle {
         padding-left: 16px;
         padding-right: 16px;
         spacing: 16px;
-        alignment: center;
 
         // Left Section: Track Info & Like
         HorizontalLayout {
             width: 280px;
             spacing: 14px;
-            alignment: center;
 
             // Thumbnail
             Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 56px;
                 height: 56px;
                 border-radius: 4px;
@@ -85,6 +84,7 @@ export component PlayerBar inherits Rectangle {
 
             // Like Button (Heart / Checkmark)
             if root.track_title != "" : Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 32px;
                 height: 32px;
                 border-radius: 16px;
@@ -194,17 +194,19 @@ export component PlayerBar inherits Rectangle {
             // Scrubber Bar
             HorizontalLayout {
                 spacing: 10px;
-                alignment: center;
 
                 Text {
+                    width: 36px;
                     text: root.current_time_str;
                     color: Theme.text-secondary;
                     font-size: 11px;
+                    horizontal-alignment: right;
                     vertical-alignment: center;
                 }
 
                 // Slider track
                 scrubber_track := Rectangle {
+                    y: (parent.height - self.height) / 2;
                     horizontal-stretch: 1;
                     height: 4px;
                     border-radius: 2px;
@@ -238,9 +240,11 @@ export component PlayerBar inherits Rectangle {
                 }
 
                 Text {
+                    width: 36px;
                     text: root.total_time_str;
                     color: Theme.text-secondary;
                     font-size: 11px;
+                    horizontal-alignment: left;
                     vertical-alignment: center;
                 }
             }
@@ -250,10 +254,10 @@ export component PlayerBar inherits Rectangle {
         HorizontalLayout {
             width: 280px;
             spacing: 12px;
-            alignment: center;
 
             // Lyrics (Microphone)
             Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 32px;
                 height: 32px;
                 Text {
@@ -268,6 +272,7 @@ export component PlayerBar inherits Rectangle {
 
             // Queue
             Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 32px;
                 height: 32px;
                 Text {
@@ -283,6 +288,7 @@ export component PlayerBar inherits Rectangle {
 
             // Devices (Connect)
             Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 32px;
                 height: 32px;
                 Text {
@@ -304,6 +310,7 @@ export component PlayerBar inherits Rectangle {
             }
 
             vol_track := Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 80px;
                 height: 4px;
                 border-radius: 2px;
@@ -326,6 +333,7 @@ export component PlayerBar inherits Rectangle {
 
             // MiniPlayer
             Rectangle {
+                y: (parent.height - self.height) / 2;
                 width: 32px;
                 height: 32px;
                 Text {

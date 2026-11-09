@@ -35,6 +35,7 @@ export struct TrackItem {
     play_count_str: string,
     is_liked: bool,
     is_playing: bool,
+    image_url: string,
 }
 
 export struct PlaylistItem {
@@ -44,6 +45,7 @@ export struct PlaylistItem {
     is_pinned: bool,
     is_active: bool,
     item_type: int, // 0: Playlist, 1: Album, 2: Artist, 3: Liked, 4: Radio
+    image_url: string,
 }
 
 export struct DeviceItem {

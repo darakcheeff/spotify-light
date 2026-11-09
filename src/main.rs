@@ -202,6 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     play_count_str: "".into(),
                                     is_liked: false,
                                     is_playing: false,
+                                    image_url: "".into(),
                                 }
                             }).collect();
 
@@ -332,6 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 is_pinned: false,
                                                 is_active: false,
                                                 item_type,
+                                                image_url: "".into(),
                                             }
                                         }).collect();
 
@@ -463,6 +465,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             is_pinned: false,
                                             is_active: false,
                                             item_type,
+                                            image_url: "".into(),
                                         }
                                     }).collect();
 
@@ -623,6 +626,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             is_pinned: false,
                                             is_active: false,
                                             item_type,
+                                            image_url: "".into(),
                                         }
                                     }).collect();
 

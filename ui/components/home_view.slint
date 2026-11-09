@@ -41,6 +41,7 @@ export component HomeView inherits Rectangle {
             // 1. Top Category Chips (Все, Музыка, Подкасты, Аудиокниги)
             HorizontalLayout {
                 spacing: 8px;
+                alignment: start;
                 for chip_text[idx] in ["Все", "Музыка", "Подкасты", "Аудиокниги"] : Rectangle {
                     height: 32px;
                     border-radius: 16px;
@@ -126,25 +127,26 @@ export component HomeView inherits Rectangle {
 
                     for col_idx in 4 : Rectangle {
                         property <int> p_idx: row_idx * 4 + col_idx;
-                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false, item_type: 0 };
+                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false, item_type: 0, image_url: "" };
                         property <bool> is_valid: pl.id != "";
                         property <bool> is_liked_folder: pl.item_type == 3;
                         property <bool> is_killshot: pl.item_type == 4;
                         property <bool> is_offline: pl.item_type == 1;
 
-                        horizontal-stretch: 1;
+                        width: (parent.width - 36px) / 4;
                         height: 58px;
                         border-radius: 4px;
                         background: card_touch.has-hover ? #383838 : #282828;
                         visible: is_valid;
+                        clip: true;
 
                         HorizontalLayout {
                             padding-right: 12px;
                             spacing: 12px;
-                            alignment: center;
 
                             // Left square artwork with authentic badges
                             Rectangle {
+                                y: (parent.height - self.height) / 2;
                                 width: 58px;
                                 height: 58px;
                                 border-radius: 4px;
@@ -175,6 +177,7 @@ export component HomeView inherits Rectangle {
 
                             // Hover Play Button
                             Rectangle {
+                                y: (parent.height - self.height) / 2;
                                 width: 36px;
                                 height: 36px;
                                 border-radius: 18px;
@@ -334,15 +337,16 @@ export component HomeView inherits Rectangle {
 
                     for idx in 4 : Rectangle {
                         property <int> p_idx: idx + 4;
-                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false, item_type: 0 };
+                        property <PlaylistItem> pl: p_idx < root.playlists.length ? root.playlists[p_idx] : { id: "", title: "", subtitle: "", is_pinned: false, is_active: false, item_type: 0, image_url: "" };
                         property <bool> is_valid: pl.id != "";
                         property <bool> is_liked: pl.item_type == 3;
 
-                        horizontal-stretch: 1;
+                        width: (parent.width - 48px) / 4;
                         height: 250px;
                         border-radius: Theme.radius-medium;
                         background: rec_touch.has-hover ? #242424 : #181818;
                         visible: is_valid;
+                        clip: true;
 
                         VerticalLayout {
                             padding: 12px;

@@ -69,10 +69,10 @@ export component BrowseView inherits Rectangle {
                         y: 16px;
                         text: card.title;
                         color: #ffffff;
-                        font-size: 20px;
+                        font-size: 18px;
                         font-weight: 800;
-                        overflow: elide;
-                        width: 140px;
+                        width: parent.width - 70px;
+                        wrap: word-wrap;
                     }
 
                     // Decorative Icon Badge (rotated style like Spotify)

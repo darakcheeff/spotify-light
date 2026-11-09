@@ -30,10 +30,11 @@ export component AlbumView inherits Rectangle {
                     padding-right: 32px;
                     padding-bottom: 24px;
                     spacing: 24px;
-                    alignment: end;
+                    alignment: start;
 
                     // Cover Art
                     Rectangle {
+                        y: parent.height - self.height - 24px;
                         width: 180px;
                         height: 180px;
                         border-radius: 6px;
@@ -89,10 +90,10 @@ export component AlbumView inherits Rectangle {
                     padding-left: 32px;
                     padding-right: 32px;
                     spacing: 24px;
-                    alignment: center;
 
                     // Big Green Play Button
                     Rectangle {
+                        y: (parent.height - self.height) / 2;
                         width: 52px;
                         height: 52px;
                         border-radius: 26px;
@@ -111,10 +112,33 @@ export component AlbumView inherits Rectangle {
                         }
                     }
 
-                    Text { text: "🔀"; font-size: 22px; color: Theme.text-secondary; }
-                    Text { text: "⊕"; font-size: 26px; color: Theme.text-secondary; }
-                    Text { text: "↓"; font-size: 22px; color: Theme.text-secondary; }
-                    Text { text: "•••"; font-size: 22px; color: Theme.text-secondary; }
+                    Text {
+                        text: "🔀";
+                        font-size: 22px;
+                        color: Theme.text-secondary;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "⊕";
+                        font-size: 26px;
+                        color: Theme.text-secondary;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "↓";
+                        font-size: 22px;
+                        color: Theme.text-secondary;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "•••";
+                        font-size: 22px;
+                        color: Theme.text-secondary;
+                        vertical-alignment: center;
+                    }
 
                     Rectangle { horizontal-stretch: 1; }
 
@@ -165,12 +189,11 @@ export component AlbumView inherits Rectangle {
                         padding-left: 12px;
                         padding-right: 12px;
                         spacing: 16px;
-                        alignment: center;
 
-                        Text { width: 36px; text: "#"; color: Theme.text-secondary; font-size: 12px; }
-                        Text { horizontal-stretch: 1; text: "Название"; color: Theme.text-secondary; font-size: 12px; }
-                        Text { width: 180px; text: "Альбом"; color: Theme.text-secondary; font-size: 12px; }
-                        Text { width: 60px; text: "🕒"; color: Theme.text-secondary; font-size: 12px; horizontal-alignment: right; }
+                        Text { width: 36px; text: "#"; color: Theme.text-secondary; font-size: 12px; vertical-alignment: center; }
+                        Text { horizontal-stretch: 1; text: "Название"; color: Theme.text-secondary; font-size: 12px; vertical-alignment: center; }
+                        Text { width: 180px; text: "Альбом"; color: Theme.text-secondary; font-size: 12px; vertical-alignment: center; }
+                        Text { width: 60px; text: "🕒"; color: Theme.text-secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; }
                     }
 
                     Rectangle {
@@ -189,7 +212,6 @@ export component AlbumView inherits Rectangle {
                         padding-left: 12px;
                         padding-right: 12px;
                         spacing: 16px;
-                        alignment: center;
 
                         // Index or Play Icon
                         Text {
@@ -198,15 +220,16 @@ export component AlbumView inherits Rectangle {
                             color: trk.is_playing ? Theme.accent : Theme.text-secondary;
                             font-size: 13px;
                             font-weight: trk.is_playing ? 700 : 500;
+                            vertical-alignment: center;
                         }
 
                         // Thumbnail artwork + Title + Artist
                         HorizontalLayout {
                             horizontal-stretch: 1;
                             spacing: 12px;
-                            alignment: center;
 
                             Rectangle {
+                                y: (parent.height - self.height) / 2;
                                 width: 40px;
                                 height: 40px;
                                 border-radius: 4px;
@@ -249,6 +272,7 @@ export component AlbumView inherits Rectangle {
                             color: Theme.text-secondary;
                             font-size: 13px;
                             overflow: elide;
+                            vertical-alignment: center;
                         }
 
                         // Duration
@@ -258,6 +282,7 @@ export component AlbumView inherits Rectangle {
                             color: Theme.text-secondary;
                             font-size: 13px;
                             horizontal-alignment: right;
+                            vertical-alignment: center;
                         }
                     }
 

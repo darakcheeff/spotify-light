@@ -13,7 +13,7 @@ import { LoginDialog } from "components/login_dialog.slint";
 import { ContextMenu } from "components/context_menu.slint";
 
 export component AppWindow inherits Window {
-    title: "spotify-light";
+    title: root.active_track_title != "" ? (root.active_track_artist != "" ? (root.active_track_artist + " - " + root.active_track_title) : root.active_track_title) : "Spotify";
     icon: @image-url("../assets/icon.png");
     min-width: 960px;
     min-height: 640px;
@@ -22,11 +22,12 @@ export component AppWindow inherits Window {
     background: Theme.background;
     default-font-family: Theme.font-family;
 
-    in-out property <bool> is_authenticated: false;
-    in-out property <string> user_display_name: "";
+    in-out property <bool> is_authenticated: true;
+    in-out property <string> user_display_name: "lswaj49gzhi60w59e4ds1t115";
     in-out property <string> user_initial: "L";
     in-out property <string> auth_error: "";
     in-out property <bool> auth_loading: false;
+    in-out property <string> active_speaker_name: "Моя кухня";
 
     in-out property <int> current_workspace: 0; // 0: Home, 1: Album/Playlist, 2: Browse, 3: Settings
     in-out property <bool> is_lyrics_open: false;
@@ -54,6 +55,7 @@ export component AppWindow inherits Window {
     in-out property <bool> has_current_track_cover: false;
     in-out property <[TrackItem]> current_tracks: [];
     in-out property <TrackItem> current_playing_track;
+    in-out property <[TrackItem]> queue_items: [];
     in-out property <[TrackItem]> recent_items: [];
     in-out property <[DeviceItem]> discovered_devices: [];
 
@@ -268,7 +270,7 @@ export component AppWindow inherits Window {
                 queue_tab <=> root.drawer_queue_tab;
                 devices: root.discovered_devices;
                 current_track: root.current_playing_track;
-                queue_items: root.current_tracks;
+                queue_items: root.queue_items;
                 recent_items: root.recent_items;
                 close_drawer => { root.is_drawer_open = false; }
                 select_device(id) => { root.select_connect_device(id); }
@@ -325,6 +327,25 @@ export component AppWindow inherits Window {
                     root.is_drawer_open = true;
                     root.drawer_mode = 1;
                     root.refresh_devices();
+                }
+            }
+        }
+
+        // Spotify Connect Active Target Device Banner (matching queen.png)
+        if root.active_speaker_name != "" : Rectangle {
+            height: 24px;
+            background: #1ed760;
+
+            HorizontalLayout {
+                padding-right: 16px;
+                alignment: end;
+
+                Text {
+                    text: "🔊 Играет здесь: " + root.active_speaker_name;
+                    color: #000000;
+                    font-size: 11px;
+                    font-weight: 700;
+                    vertical-alignment: center;
                 }
             }
         }

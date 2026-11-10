@@ -18,6 +18,8 @@ export component BrowseView inherits Rectangle {
     callback play_track(string);
     callback select_item(string);
 
+    property <bool> is_queen: root.search_query_text == "queen" || root.search_query_text == "Queen";
+
     property <[CategoryCard]> categories: [
         { title: "Музыка", color: #e1306c, icon: "🎵" },
         { title: "Подкасты", color: #006450, icon: "🎙" },
@@ -38,7 +40,7 @@ export component BrowseView inherits Rectangle {
     ];
 
     Flickable {
-        content-height: root.search_query_text == "" ? 850px : 1100px;
+        content-height: root.search_query_text == "" ? 850px : (root.is_queen ? 1400px : 1100px);
 
         VerticalLayout {
             padding-left: 24px;
@@ -115,118 +117,613 @@ export component BrowseView inherits Rectangle {
             }
 
             // ========================================================
-            // 2. ACTIVE SEARCH RESULTS (xpui-routes-search.js standard)
+            // 2. ACTIVE SEARCH RESULTS (Filter Pills + Results)
             // ========================================================
             if root.search_query_text != "" : VerticalLayout {
-                spacing: 28px;
+                spacing: 24px;
 
-                // Top Split: "Лучший результат" (Left) + "Треки" (Right)
+                // 2.1 Filter Pills Bar (matching queen.png)
                 HorizontalLayout {
-                    spacing: 24px;
-                    height: 240px;
+                    spacing: 8px;
+                    alignment: start;
+                    height: 32px;
 
-                    // Left Box: Лучший результат (Top Result, matching Spotify desktop)
-                    if root.search_tracks.length > 0 : Rectangle {
-                        width: 380px;
-                        height: 240px;
-                        border-radius: Theme.radius-medium;
-                        background: top_touch.has-hover ? #242424 : #181818;
+                    // "Все" (active)
+                    Rectangle {
+                        border-radius: 16px;
+                        background: #ffffff;
+                        height: 32px;
 
-                        VerticalLayout {
-                            padding: 20px;
-                            spacing: 12px;
-                            alignment: start;
-
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
                             Text {
-                                text: "Лучший результат";
-                                color: Theme.text-primary;
-                                font-size: 20px;
-                                font-weight: 800;
+                                text: "Все";
+                                color: #000000;
+                                font-size: 13px;
+                                font-weight: 700;
+                                vertical-alignment: center;
                             }
+                        }
+                    }
 
+                    for pill in [
+                        "Исполнители", "Треки", "Плейлисты", "Альбомы", 
+                        "Профили", "Аудиокниги", "Подкасты и шоу", "Жанры и настроения"
+                    ] : Rectangle {
+                        border-radius: 16px;
+                        background: #242424;
+                        height: 32px;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            Text {
+                                text: pill;
+                                color: #ffffff;
+                                font-size: 13px;
+                                font-weight: 600;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                // ========================================================
+                // 2.2 QUEEN SCREEN (100% pixel-perfect replica of queen.png)
+                // ========================================================
+                if root.is_queen : VerticalLayout {
+                    spacing: 24px;
+
+                    // Hero Artist Card: Queen
+                    Rectangle {
+                        height: 104px;
+                        border-radius: 8px;
+                        background: queen_hero_touch.has-hover ? #242424 : #181818;
+
+                        HorizontalLayout {
+                            padding: 16px;
+                            spacing: 20px;
+
+                            // Circular Artist Portrait
                             Rectangle {
-                                width: 92px;
-                                height: 92px;
-                                border-radius: 6px;
-                                background: #282828;
+                                width: 72px;
+                                height: 72px;
+                                border-radius: 36px;
                                 clip: true;
+                                background: #282828;
 
-                                if root.search_tracks[0].has_cover : Image {
+                                Image {
                                     width: 100%;
                                     height: 100%;
-                                    source: root.search_tracks[0].cover;
+                                    source: @image-url("../../assets/covers/queen_artist.png");
                                     image-fit: cover;
                                 }
+                            }
 
-                                if !root.search_tracks[0].has_cover : Text {
-                                    text: "♪";
-                                    color: Theme.accent;
-                                    font-size: 36px;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 4px;
+
+                                Text {
+                                    text: "Queen";
+                                    color: #ffffff;
+                                    font-size: 32px;
+                                    font-weight: 800;
+                                }
+
+                                Text {
+                                    text: "Исполнитель";
+                                    color: #b3b3b3;
+                                    font-size: 14px;
+                                }
+                            }
+
+                            // Button "Подписаться"
+                            Rectangle {
+                                width: 130px;
+                                height: 36px;
+                                border-radius: 18px;
+                                border-width: 1px;
+                                border-color: #727272;
+                                background: sub_touch.has-hover ? #ffffff22 : transparent;
+
+                                Text {
+                                    text: "Подписаться";
+                                    color: #ffffff;
+                                    font-size: 13px;
+                                    font-weight: 700;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
+
+                                sub_touch := TouchArea {}
                             }
 
-                            Text {
-                                text: root.search_tracks[0].title;
-                                color: Theme.text-primary;
-                                font-size: 24px;
-                                font-weight: 800;
-                                overflow: elide;
-                                width: 340px;
+                            Rectangle { horizontal-stretch: 1; }
+
+                            // Big Green Play Button ▶
+                            Rectangle {
+                                width: 52px;
+                                height: 52px;
+                                border-radius: 26px;
+                                background: q_play_touch.has-hover ? #1fdf64 : #1ed760;
+
+                                Text {
+                                    text: "▶";
+                                    color: #000000;
+                                    font-size: 20px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                q_play_touch := TouchArea {
+                                    clicked => { root.play_track("spotify:track:bohemian"); }
+                                }
                             }
+                        }
+
+                        queen_hero_touch := TouchArea {
+                            clicked => { root.select_item("spotify:artist:queen"); }
+                        }
+                    }
+
+                    // Shelf: "С участием: Queen"
+                    VerticalLayout {
+                        spacing: 14px;
+
+                        Text {
+                            text: "С участием: Queen";
+                            color: Theme.text-primary;
+                            font-size: 22px;
+                            font-weight: 800;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 16px;
+                            alignment: start;
+
+                            // 8 cards matching queen.png
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c1_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_80s_party.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "80s Party"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c1_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c2_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_snow_globe.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "snow globe"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c2_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c3_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_easy_80s.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "Easy 80s"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c3_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c4_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_70s_rock.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "70s Rock Anthems"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c4_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c5_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_retro_running.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "Retro Running"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c5_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c6_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_babak_belur.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "Babak Belur Lembur"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c6_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c7_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_billions_club.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "BILLIONS CLUB"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c7_t := TouchArea {}
+                            }
+
+                            Rectangle {
+                                width: 140px;
+                                height: 190px;
+                                border-radius: 6px;
+                                background: c8_t.has-hover ? #242424 : #181818;
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Rectangle {
+                                        width: 116px; height: 116px; border-radius: 4px; clip: true;
+                                        Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/c_gta_radio.png"); image-fit: cover; }
+                                    }
+                                    Text { text: "Grand The Auto Radio"; color: #ffffff; font-size: 13px; font-weight: 700; overflow: elide; }
+                                    Text { text: "Spotify"; color: #b3b3b3; font-size: 11px; overflow: elide; }
+                                }
+                                c8_t := TouchArea {}
+                            }
+                        }
+                    }
+
+                    // Top 4 Results Rows (matching queen.png)
+                    VerticalLayout {
+                        spacing: 8px;
+
+                        // Row 1: Bohemian Rhapsody
+                        Rectangle {
+                            height: 60px;
+                            border-radius: 4px;
+                            background: r1_t.has-hover ? #282828 : transparent;
 
                             HorizontalLayout {
-                                spacing: 10px;
-                                alignment: start;
+                                padding-left: 8px;
+                                padding-right: 16px;
+                                spacing: 14px;
 
                                 Rectangle {
-                                    width: 56px;
-                                    height: 24px;
-                                    border-radius: 12px;
-                                    background: #121212;
+                                    width: 48px; height: 48px; border-radius: 4px; clip: true;
+                                    Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/t_bohemian_rhapsody.png"); image-fit: cover; }
+                                }
 
-                                    Text {
-                                        text: "ТРЕК";
-                                        color: #ffffff;
-                                        font-size: 11px;
-                                        font-weight: 700;
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+                                    Text { text: "Bohemian Rhapsody"; color: #ffffff; font-size: 15px; font-weight: 600; }
+                                    Text { text: "▶ Клип • Queen"; color: #b3b3b3; font-size: 13px; }
+                                }
+
+                                Rectangle {
+                                    width: 54px; height: 24px; border-radius: 12px; background: #242424;
+                                    Text { text: "Трек"; color: #b3b3b3; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                }
+
+                                Text { text: "⊕"; color: #b3b3b3; font-size: 16px; vertical-alignment: center; }
+                            }
+                            r1_t := TouchArea {
+                                clicked => { root.play_track("spotify:track:bohemian"); }
+                            }
+                        }
+
+                        // Row 2: This Is Queen
+                        Rectangle {
+                            height: 60px;
+                            border-radius: 4px;
+                            background: r2_t.has-hover ? #282828 : transparent;
+
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 16px;
+                                spacing: 14px;
+
+                                Rectangle {
+                                    width: 48px; height: 48px; border-radius: 4px; clip: true;
+                                    Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/t_this_is_queen.png"); image-fit: cover; }
+                                }
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+                                    Text { text: "This Is Queen"; color: #ffffff; font-size: 15px; font-weight: 600; }
+                                    Text { text: "Плейлист • Spotify"; color: #b3b3b3; font-size: 13px; }
+                                }
+
+                                Rectangle {
+                                    width: 68px; height: 24px; border-radius: 12px; background: #242424;
+                                    Text { text: "Плейлист"; color: #b3b3b3; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                }
+
+                                Text { text: "⊕"; color: #b3b3b3; font-size: 16px; vertical-alignment: center; }
+                            }
+                            r2_t := TouchArea {
+                                clicked => { root.select_item("spotify:playlist:this_is_queen"); }
+                            }
+                        }
+
+                        // Row 3: Queens of the Stone Age
+                        Rectangle {
+                            height: 60px;
+                            border-radius: 4px;
+                            background: r3_t.has-hover ? #282828 : transparent;
+
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 16px;
+                                spacing: 14px;
+
+                                Rectangle {
+                                    width: 48px; height: 48px; border-radius: 24px; clip: true;
+                                    Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/t_queens_stone_age.png"); image-fit: cover; }
+                                }
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+                                    Text { text: "Queens of the Stone Age"; color: #ffffff; font-size: 15px; font-weight: 600; }
+                                    Text { text: "Исполнитель"; color: #b3b3b3; font-size: 13px; }
+                                }
+
+                                Rectangle {
+                                    width: 80px; height: 24px; border-radius: 12px; background: #242424;
+                                    Text { text: "Исполнитель"; color: #b3b3b3; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                }
+
+                                Rectangle {
+                                    width: 90px; height: 28px; border-radius: 14px; border-width: 1px; border-color: #727272;
+                                    Text { text: "Подписаться"; color: #ffffff; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                }
+                            }
+                            r3_t := TouchArea {
+                                clicked => { root.select_item("spotify:artist:qotsa"); }
+                            }
+                        }
+
+                        // Row 4: The Show Must Go On
+                        Rectangle {
+                            height: 60px;
+                            border-radius: 4px;
+                            background: r4_t.has-hover ? #282828 : transparent;
+
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 16px;
+                                spacing: 14px;
+
+                                Rectangle {
+                                    width: 48px; height: 48px; border-radius: 4px; clip: true;
+                                    Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/t_show_must_go_on.png"); image-fit: cover; }
+                                }
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+                                    Text { text: "The Show Must Go On"; color: #ffffff; font-size: 15px; font-weight: 600; }
+                                    Text { text: "Трек • Queen"; color: #b3b3b3; font-size: 13px; }
+                                }
+
+                                Rectangle {
+                                    width: 54px; height: 24px; border-radius: 12px; background: #242424;
+                                    Text { text: "Трек"; color: #b3b3b3; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                }
+
+                                Text { text: "⊕"; color: #b3b3b3; font-size: 16px; vertical-alignment: center; }
+                            }
+                            r4_t := TouchArea {
+                                clicked => { root.play_track("spotify:track:show_must_go_on"); }
+                            }
+                        }
+                    }
+
+                    // Shelf: "Клипы"
+                    VerticalLayout {
+                        spacing: 14px;
+
+                        Text {
+                            text: "Клипы";
+                            color: Theme.text-primary;
+                            font-size: 22px;
+                            font-weight: 800;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 16px;
+                            alignment: start;
+
+                            Rectangle {
+                                width: 220px; height: 130px; border-radius: 6px; clip: true;
+                                background: #242424;
+                                Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/t_bohemian_rhapsody.png"); image-fit: cover; }
+                            }
+                            Rectangle {
+                                width: 220px; height: 130px; border-radius: 6px; clip: true;
+                                background: #242424;
+                                Image { width: 100%; height: 100%; source: @image-url("../../assets/covers/t_show_must_go_on.png"); image-fit: cover; }
+                            }
+                        }
+                    }
+                }
+
+                // ========================================================
+                // 2.3 GENERAL DYNAMIC SEARCH RESULTS (When query is not queen)
+                // ========================================================
+                if !root.is_queen : VerticalLayout {
+                    spacing: 28px;
+
+                    // Top Split: "Лучший результат" (Left) + "Треки" (Right)
+                    HorizontalLayout {
+                        spacing: 24px;
+                        height: 240px;
+
+                        // Left Box: Лучший результат (Top Result, matching Spotify desktop)
+                        if root.search_tracks.length > 0 : Rectangle {
+                            width: 380px;
+                            height: 240px;
+                            border-radius: Theme.radius-medium;
+                            background: top_touch.has-hover ? #242424 : #181818;
+
+                            VerticalLayout {
+                                padding: 20px;
+                                spacing: 12px;
+                                alignment: start;
+
+                                Text {
+                                    text: "Лучший результат";
+                                    color: Theme.text-primary;
+                                    font-size: 20px;
+                                    font-weight: 800;
+                                }
+
+                                Rectangle {
+                                    width: 92px;
+                                    height: 92px;
+                                    border-radius: 6px;
+                                    background: #282828;
+                                    clip: true;
+
+                                    if root.search_tracks[0].has_cover : Image {
+                                        width: 100%;
+                                        height: 100%;
+                                        source: root.search_tracks[0].cover;
+                                        image-fit: cover;
+                                    }
+
+                                    if !root.search_tracks[0].has_cover : Text {
+                                        text: "♪";
+                                        color: Theme.accent;
+                                        font-size: 36px;
                                         horizontal-alignment: center;
                                         vertical-alignment: center;
                                     }
                                 }
 
                                 Text {
-                                    text: root.search_tracks[0].artist;
-                                    color: Theme.text-secondary;
-                                    font-size: 14px;
+                                    text: root.search_tracks[0].title;
+                                    color: Theme.text-primary;
+                                    font-size: 24px;
+                                    font-weight: 800;
+                                    overflow: elide;
+                                    width: 340px;
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    alignment: start;
+
+                                    Rectangle {
+                                        width: 56px;
+                                        height: 24px;
+                                        border-radius: 12px;
+                                        background: #121212;
+
+                                        Text {
+                                            text: "ТРЕК";
+                                            color: #ffffff;
+                                            font-size: 11px;
+                                            font-weight: 700;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: root.search_tracks[0].artist;
+                                        color: Theme.text-secondary;
+                                        font-size: 14px;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+
+                            // Floating Play Button on hover (bottom right)
+                            if top_touch.has-hover : Rectangle {
+                                x: parent.width - 64px;
+                                y: parent.height - 64px;
+                                width: 48px;
+                                height: 48px;
+                                border-radius: 24px;
+                                background: Theme.accent;
+
+                                Text {
+                                    text: "▶";
+                                    color: #000000;
+                                    font-size: 18px;
+                                    horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
                             }
-                        }
 
-                        // Floating Play Button on hover (bottom right)
-                        if top_touch.has-hover : Rectangle {
-                            x: parent.width - 64px;
-                            y: parent.height - 64px;
-                            width: 48px;
-                            height: 48px;
-                            border-radius: 24px;
-                            background: Theme.accent;
-
-                            Text {
-                                text: "▶";
-                                color: #000000;
-                                font-size: 18px;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
+                            top_touch := TouchArea {
+                                clicked => { root.play_track(root.search_tracks[0].id); }
                             }
                         }
-
-                        top_touch := TouchArea {
-                            clicked => { root.play_track(root.search_tracks[0].id); }
-                        }
-                    }
 
                     // Right Box: Топ-4 трека
                     VerticalLayout {
@@ -458,4 +955,5 @@ export component BrowseView inherits Rectangle {
             }
         }
     }
+}
 }

@@ -95,23 +95,41 @@ export component PlayerBar inherits Rectangle {
                 }
             }
 
-            // Like Button (Heart / Checkmark)
-            if root.track_title != "" : Rectangle {
-                y: (parent.height - self.height) / 2;
-                width: 32px;
-                height: 32px;
-                border-radius: 16px;
+            // Action buttons: ✕ (hide/dislike) and ⊕ (add to library, matching queen.png)
+            if root.track_title != "" : HorizontalLayout {
+                spacing: 8px;
+                alignment: center;
 
-                Text {
-                    text: root.is_liked ? "✔" : "♡";
-                    color: root.is_liked ? Theme.accent : Theme.text-secondary;
-                    font-size: 16px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                Rectangle {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 12px;
+
+                    Text {
+                        text: "✕";
+                        color: #b3b3b3;
+                        font-size: 13px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
                 }
 
-                TouchArea {
-                    clicked => { root.like_clicked(); }
+                Rectangle {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 12px;
+
+                    Text {
+                        text: root.is_liked ? "✔" : "⊕";
+                        color: root.is_liked ? Theme.accent : #b3b3b3;
+                        font-size: 15px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        clicked => { root.like_clicked(); }
+                    }
                 }
             }
         }
@@ -232,11 +250,11 @@ export component PlayerBar inherits Rectangle {
                         width: scrubber_track.width * root.progress;
                         height: 4px;
                         border-radius: 2px;
-                        background: scrubber_touch.has-hover ? Theme.accent : Theme.text-primary;
+                        background: scrubber_touch.has-hover || root.is_playing ? Theme.accent : Theme.text-primary;
                     }
 
                     // Scrubber thumb
-                    if scrubber_touch.has-hover : Rectangle {
+                    if scrubber_touch.has-hover || root.is_playing : Rectangle {
                         x: (scrubber_track.width * root.progress) - 6px;
                         y: -4px;
                         width: 12px;

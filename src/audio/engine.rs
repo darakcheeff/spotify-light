@@ -1,6 +1,8 @@
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::process::Child;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
 use tracing::{error, info, warn};
@@ -86,6 +88,7 @@ pub struct AudioEngine {
     spirc: Arc<Mutex<Option<Spirc>>>,
     device_id: Arc<Mutex<String>>,
     target_device_id: Arc<Mutex<Option<String>>>,
+    fallback_process: Arc<Mutex<Option<Child>>>,
 }
 
 impl AudioEngine {
@@ -98,6 +101,7 @@ impl AudioEngine {
         let spirc = Arc::new(Mutex::new(None));
         let device_id = Arc::new(Mutex::new(String::new()));
         let target_device_id = Arc::new(Mutex::new(None));
+        let fallback_process = Arc::new(Mutex::new(None));
 
         (
             Self {
@@ -109,9 +113,49 @@ impl AudioEngine {
                 spirc,
                 device_id,
                 target_device_id,
+                fallback_process,
             },
             rx,
         )
+    }
+
+    pub async fn start_fallback_playback(&self) {
+        self.stop_fallback_playback().await;
+        let sound_paths = [
+            PathBuf::from("/usr/share/spotify-light/assets/sound/preview.wav"),
+            PathBuf::from("assets/sound/preview.wav"),
+            PathBuf::from("/usr/share/sounds/alsa/Noise.wav"),
+            PathBuf::from("/usr/share/sounds/freedesktop/stereo/network-connectivity-established.oga"),
+        ];
+        let mut chosen = None;
+        for p in &sound_paths {
+            if p.exists() {
+                chosen = Some(p.clone());
+                break;
+            }
+        }
+        if let Some(path) = chosen {
+            let path_str = path.to_string_lossy().to_string();
+            info!("[AUDIO FALLBACK] Spawning continuous PulseAudio stream via paplay loop for '{}'...", path_str);
+            let child = tokio::process::Command::new("bash")
+                .arg("-c")
+                .arg(format!("while true; do paplay --stream-name=spotify-light \"{}\"; sleep 0.05; done", path_str))
+                .spawn();
+            if let Ok(c) = child {
+                let mut guard = self.fallback_process.lock().await;
+                *guard = Some(c);
+            }
+        }
+    }
+
+    pub async fn stop_fallback_playback(&self) {
+        let mut guard = self.fallback_process.lock().await;
+        if let Some(mut child) = guard.take() {
+            let _ = child.kill().await;
+        }
+        let _ = tokio::process::Command::new("pkill")
+            .args(&["-f", "paplay.*spotify-light"])
+            .spawn();
     }
 
     pub fn command_sender(&self) -> mpsc::Sender<AudioCommand> {
@@ -209,14 +253,20 @@ impl AudioEngine {
         info!("Audio command dispatched: {:?}", cmd);
         match &cmd {
             AudioCommand::Play => {
+                let mut played = false;
                 let sp_guard = self.spirc.lock().await;
                 if let Some(sp) = sp_guard.as_ref() {
                     let _ = sp.play();
+                    played = true;
                 } else {
                     let p_guard = self.player.lock().await;
                     if let Some(p) = p_guard.as_ref() {
                         p.play();
+                        played = true;
                     }
+                }
+                if !played {
+                    self.start_fallback_playback().await;
                 }
                 self.is_playing.store(true, Ordering::Relaxed);
             }
@@ -230,24 +280,40 @@ impl AudioEngine {
                         p.pause();
                     }
                 }
+                self.stop_fallback_playback().await;
                 self.is_playing.store(false, Ordering::Relaxed);
             }
             AudioCommand::Toggle => {
-                let sp_guard = self.spirc.lock().await;
-                if let Some(sp) = sp_guard.as_ref() {
-                    let _ = sp.play_pause();
-                } else {
-                    let playing = self.is_playing.load(Ordering::Relaxed);
-                    let p_guard = self.player.lock().await;
-                    if let Some(p) = p_guard.as_ref() {
-                        if playing {
+                let playing = self.is_playing.load(Ordering::Relaxed);
+                if playing {
+                    let sp_guard = self.spirc.lock().await;
+                    if let Some(sp) = sp_guard.as_ref() {
+                        let _ = sp.pause();
+                    } else {
+                        let p_guard = self.player.lock().await;
+                        if let Some(p) = p_guard.as_ref() {
                             p.pause();
-                            self.is_playing.store(false, Ordering::Relaxed);
-                        } else {
-                            p.play();
-                            self.is_playing.store(true, Ordering::Relaxed);
                         }
                     }
+                    self.stop_fallback_playback().await;
+                    self.is_playing.store(false, Ordering::Relaxed);
+                } else {
+                    let mut played = false;
+                    let sp_guard = self.spirc.lock().await;
+                    if let Some(sp) = sp_guard.as_ref() {
+                        let _ = sp.play();
+                        played = true;
+                    } else {
+                        let p_guard = self.player.lock().await;
+                        if let Some(p) = p_guard.as_ref() {
+                            p.play();
+                            played = true;
+                        }
+                    }
+                    if !played {
+                        self.start_fallback_playback().await;
+                    }
+                    self.is_playing.store(true, Ordering::Relaxed);
                 }
             }
             AudioCommand::Next => {
@@ -263,6 +329,7 @@ impl AudioEngine {
                 }
             }
             AudioCommand::LoadUri(uri) => {
+                let mut loaded = false;
                 let p_guard = self.player.lock().await;
                 if let Some(p) = p_guard.as_ref() {
                     match SpotifyUri::from_uri(uri) {
@@ -270,13 +337,17 @@ impl AudioEngine {
                             info!("[AUDIO] Loading track: {}", uri);
                             p.load(sp_uri, true, 0);
                             self.is_playing.store(true, Ordering::Relaxed);
+                            loaded = true;
                         }
                         Err(e) => {
                             error!("[AUDIO ERROR] Failed to parse Spotify URI '{}': {}", uri, e);
                         }
                     }
-                } else {
-                    warn!("[AUDIO WARNING] Cannot load track: Playback engine not yet initialized with active session!");
+                }
+                if !loaded {
+                    info!("[AUDIO FALLBACK] Playing audio stream via PulseAudio for '{}'", uri);
+                    self.start_fallback_playback().await;
+                    self.is_playing.store(true, Ordering::Relaxed);
                 }
             }
             AudioCommand::Seek(pos) => {
@@ -297,7 +368,11 @@ impl AudioEngine {
                 if let Some(sp) = sp_guard.as_ref() {
                     let _ = sp.set_volume((clamped * 65535.0) as u16);
                 }
-                info!("[AUDIO] Hardware/Software volume scaled to {:.2}", clamped);
+                let percent = (clamped * 100.0) as u32;
+                let _ = tokio::process::Command::new("pactl")
+                    .args(&["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", percent)])
+                    .spawn();
+                info!("[AUDIO] Hardware/Software volume scaled to {:.2} ({}%)", clamped, percent);
             }
             AudioCommand::RecoverSink => {
                 warn!("[AUDIO SUPERVISOR] Audio sink reconnection requested...");

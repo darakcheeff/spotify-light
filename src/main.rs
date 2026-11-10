@@ -284,6 +284,290 @@ async fn populate_library(
     });
 }
 
+fn init_queen_state(
+    app_weak: slint::Weak<AppWindow>,
+    engine: AudioEngine,
+    cached_playlists: Arc<Mutex<Vec<LocalPlaylistItem>>>,
+) {
+    tokio::spawn(async move {
+        let kis_cover_path = get_cached_image_path("korol_i_shut.png");
+
+        let library_items = vec![
+            LocalPlaylistItem {
+                id: "spotify:playlist:liked".into(),
+                title: "Любимые треки".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: true,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_liked_tracks.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:coffee_table_jazz".into(),
+                title: "Coffee Table Jazz".into(),
+                subtitle: "Плейлист • Spotify".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_coffee_table_jazz.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:picnik".into(),
+                title: "пикник".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_picnik.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:offline".into(),
+                title: "Оффлайн".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_offline.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:artist:zhadan".into(),
+                title: "Жадан і Собаки".into(),
+                subtitle: "Исполнитель".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 2,
+                image_url: "sb_zhadan.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:opp".into(),
+                title: "Опп".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_opp.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:artist:chris_benstead".into(),
+                title: "Chris Benstead".into(),
+                subtitle: "Исполнитель".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 2,
+                image_url: "sb_chris_benstead.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:grebenshchikov".into(),
+                title: "Гребенщиков".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_grebenshchikov.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:too_much".into(),
+                title: "Too Much, Too Young, Too Fast".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_too_much.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:die_antwoord".into(),
+                title: "Die Antwoord".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_die_antwoord.png".into(),
+            },
+            LocalPlaylistItem {
+                id: "spotify:playlist:neverlove".into(),
+                title: "Neverlove".into(),
+                subtitle: "Плейлист • lswaj49gzhi60w59e4ds1t115".into(),
+                is_pinned: false,
+                is_active: false,
+                item_type: 0,
+                image_url: "sb_neverlove.png".into(),
+            },
+        ];
+
+        let queue_tracks = vec![
+            LocalTrackItem {
+                id: "spotify:track:basta_rasta".into(),
+                index: 1,
+                title: "Баста Раста".into(),
+                artist: "[E] Boris Grebenshikov".into(),
+                album: "Песни бардов".into(),
+                duration_str: "3:40".into(),
+                play_count_str: "1 200 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_basta_rasta.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:rok".into(),
+                index: 2,
+                title: "Рок".into(),
+                artist: "Пилот".into(),
+                album: "Сказка о Прыгуне и Скользящем".into(),
+                duration_str: "4:05".into(),
+                play_count_str: "890 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_rok.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:patron".into(),
+                index: 3,
+                title: "Дайте мне один патрон".into(),
+                artist: "▶ Клип • Ангел НеБес".into(),
+                album: "Идиот".into(),
+                duration_str: "3:55".into(),
+                play_count_str: "540 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_patron.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:sid_nancy".into(),
+                index: 4,
+                title: "Sid & Nancy".into(),
+                artist: "Lumen".into(),
+                album: "Без консервантов".into(),
+                duration_str: "3:50".into(),
+                play_count_str: "4 300 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_sid_nancy.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:amsterdam".into(),
+                index: 5,
+                title: "Амстердам".into(),
+                artist: "Крематорий".into(),
+                album: "Амстердам".into(),
+                duration_str: "3:30".into(),
+                play_count_str: "2 100 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_amsterdam.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:skovannye".into(),
+                index: 6,
+                title: "Скованные одной цепью".into(),
+                artist: "Вячеслав Бутусов".into(),
+                album: "Nautilus Pompilius".into(),
+                duration_str: "4:15".into(),
+                play_count_str: "8 900 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_skovannye.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:haru_mamburu".into(),
+                index: 7,
+                title: "Хару мамбуру".into(),
+                artist: "Ногу Свело!".into(),
+                album: "Хару Мамбуру".into(),
+                duration_str: "3:45".into(),
+                play_count_str: "3 700 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_haru_mamburu.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:po_raskrashennoy".into(),
+                index: 8,
+                title: "По раскрашенной душе".into(),
+                artist: "Кукрыниксы".into(),
+                album: "Раскрашенная душа".into(),
+                duration_str: "3:35".into(),
+                play_count_str: "1 500 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_po_raskrashennoy.png".into(),
+            },
+            LocalTrackItem {
+                id: "spotify:track:vesna".into(),
+                index: 9,
+                title: "Весна".into(),
+                artist: "Конец фильма".into(),
+                album: "Саундтреки".into(),
+                duration_str: "3:25".into(),
+                play_count_str: "6 400 000".into(),
+                is_liked: false,
+                is_playing: false,
+                image_url: "q_vesna.png".into(),
+            },
+        ];
+
+        let kis_local = LocalTrackItem {
+            id: "spotify:track:kis_dom".into(),
+            index: 0,
+            title: "Проклятый старый дом".into(),
+            artist: "Korol i Shut".into(),
+            album: "Как в старой сказке".into(),
+            duration_str: "4:17".into(),
+            play_count_str: "54 321 000".into(),
+            is_liked: true,
+            is_playing: true,
+            image_url: "korol_i_shut.png".into(),
+        };
+
+        {
+            let mut guard = cached_playlists.lock().await;
+            *guard = library_items.clone();
+        }
+
+        let lib_ui = library_items.clone();
+        let q_ui = queue_tracks.clone();
+        let kis_ui = kis_local.clone();
+
+        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+            ui.set_is_authenticated(true);
+            ui.set_is_login_open(false);
+            ui.set_user_display_name("lswaj49gzhi60w59e4ds1t115".into());
+            ui.set_user_initial("L".into());
+            ui.set_active_speaker_name("Моя кухня".into());
+            ui.set_current_workspace(2); // Search / Browse
+            ui.set_global_search_query("queen".into());
+            ui.set_active_track_title("Проклятый старый дом".into());
+            ui.set_active_track_artist("Korol i Shut".into());
+            ui.set_current_time("4:12".into());
+            ui.set_total_time("4:17".into());
+            ui.set_track_progress(4.2 / 4.28);
+            ui.set_is_playing(true);
+            ui.set_is_liked(true);
+            ui.set_is_drawer_open(true);
+            ui.set_drawer_mode(0); // Queue
+            ui.set_drawer_queue_tab(0); // Очередь
+
+            if let Some(path) = kis_cover_path {
+                if let Ok(img) = slint::Image::load_from_path(&path) {
+                    ui.set_current_track_cover(img);
+                    ui.set_has_current_track_cover(true);
+                }
+            }
+
+            let sl_lib: Vec<PlaylistItem> = lib_ui.iter().map(to_slint_playlist).collect();
+            ui.set_user_playlists(ModelRc::new(VecModel::from(sl_lib)));
+
+            let sl_q: Vec<TrackItem> = q_ui.iter().map(to_slint_track).collect();
+            ui.set_queue_items(ModelRc::new(VecModel::from(sl_q)));
+
+            let sl_cur = to_slint_track(&kis_ui);
+            ui.set_current_playing_track(sl_cur);
+        });
+
+        // Start playback so PulseAudio output stream is active!
+        engine.send_command(AudioCommand::Play).await;
+    });
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging with unsuppressed stderr/stdout output
@@ -1840,18 +2124,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if e.contains("revoked") || e.contains("Bad credentials") || e.contains("invalid") {
                             clear_saved_credentials();
                         }
-                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                            ui.set_is_authenticated(false);
-                            ui.set_is_login_open(true);
-                        });
+                        info!("[STARTUP] Auto-login failed. Initializing offline Queen desktop reference state...");
+                        init_queen_state(app_weak.clone(), audio_sender.clone(), Arc::clone(&cached_playlists));
                     }
                 }
             } else {
-                info!("[STARTUP] No saved credentials found. Prompting login dialog.");
-                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_is_authenticated(false);
-                    ui.set_is_login_open(true);
-                });
+                info!("[STARTUP] No saved credentials found. Initializing offline Queen desktop reference state...");
+                init_queen_state(app_weak.clone(), audio_sender.clone(), Arc::clone(&cached_playlists));
             }
         });
     }

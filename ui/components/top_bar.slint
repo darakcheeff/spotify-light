@@ -112,17 +112,31 @@ export component TopBar inherits Rectangle {
                     spacing: 10px;
                     alignment: center;
 
-                    // Search Magnifying Glass
+                    // Search Magnifying Glass (Pixel-perfect centered vector icon)
                     Rectangle {
                         width: 24px;
                         height: 24px;
-                        Text {
-                            text: "🔍";
-                            font-size: 15px;
-                            color: #b3b3b3;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
+
+                        // Glass ring
+                        Rectangle {
+                            x: 3px;
+                            y: 3px;
+                            width: 12px;
+                            height: 12px;
+                            border-radius: 6px;
+                            border-width: 1.8px;
+                            border-color: browse_touch.has-hover || search_input.has-focus ? #ffffff : #b3b3b3;
+                            background: transparent;
                         }
+
+                        // Glass handle (diagonal stroke)
+                        Path {
+                            stroke: browse_touch.has-hover || search_input.has-focus ? #ffffff : #b3b3b3;
+                            stroke-width: 2px;
+                            MoveTo { x: 12; y: 12; }
+                            LineTo { x: 18; y: 18; }
+                        }
+
                         TouchArea {
                             clicked => {
                                 root.open_browse();
@@ -132,7 +146,7 @@ export component TopBar inherits Rectangle {
 
                     // Input & Placeholder
                     Rectangle {
-                        width: 350px;
+                        horizontal-stretch: 1;
                         height: 38px;
                         clip: true;
 
@@ -153,6 +167,30 @@ export component TopBar inherits Rectangle {
                             vertical-alignment: center;
                             edited => {
                                 root.search_changed(self.text);
+                            }
+                        }
+                    }
+
+                    // Clear button '✕' (visible when search text is active, matching queen.png)
+                    if root.search_text != "" : Rectangle {
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: clear_touch.has-hover ? #2e2e2e : transparent;
+
+                        Text {
+                            text: "✕";
+                            color: clear_touch.has-hover ? #ffffff : #b3b3b3;
+                            font-size: 13px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        clear_touch := TouchArea {
+                            clicked => {
+                                root.search_text = "";
+                                root.search_changed("");
                             }
                         }
                     }
@@ -225,6 +263,7 @@ export component TopBar inherits Rectangle {
                 Text {
                     text: "🔔";
                     font-size: 15px;
+                    color: bell_touch.has-hover ? #ffffff : #b3b3b3;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
@@ -232,6 +271,24 @@ export component TopBar inherits Rectangle {
                 bell_touch := TouchArea {
                     clicked => { root.notifications_clicked(); }
                 }
+            }
+
+            // Community / Friends icon (matching queen.png)
+            if root.is_authenticated : Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: 18px;
+                background: friends_touch.has-hover ? #2a2a2a : transparent;
+
+                Text {
+                    text: "👥";
+                    font-size: 15px;
+                    color: friends_touch.has-hover ? #ffffff : #b3b3b3;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                friends_touch := TouchArea {}
             }
 
             // User Avatar: Clean letter circle (no overflowing long text, matching 9.png)

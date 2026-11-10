@@ -99,7 +99,13 @@ export component RightDrawer inherits Rectangle {
 
             // Tab 0: Queue
             if root.queue_tab == 0 : VerticalLayout {
-                spacing: 10px;
+                spacing: 12px;
+
+                Text {
+                    text: "О рекомендациях и влиянии продвижения";
+                    color: #727272;
+                    font-size: 11px;
+                }
 
                 if root.current_track.title != "" : VerticalLayout {
                     spacing: 6px;
@@ -168,7 +174,7 @@ export component RightDrawer inherits Rectangle {
 
                 // Next up in Queue
                 Text {
-                    text: "Далее в очереди";
+                    text: "Далее";
                     color: Theme.text-secondary;
                     font-size: 12px;
                     font-weight: 700;
@@ -212,13 +218,6 @@ export component RightDrawer inherits Rectangle {
                                 padding-right: 8px;
                                 spacing: 12px;
                                 alignment: center;
-
-                                Text {
-                                    width: 16px;
-                                    text: item.index;
-                                    color: Theme.text-secondary;
-                                    font-size: 12px;
-                                }
 
                                 Rectangle {
                                     width: 40px;

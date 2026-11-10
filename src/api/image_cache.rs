@@ -22,6 +22,18 @@ pub fn get_cached_image_path(url: &str) -> Option<PathBuf> {
     if url.is_empty() {
         return None;
     }
+    let direct = PathBuf::from(url);
+    if direct.exists() {
+        return Some(direct);
+    }
+    let relative = PathBuf::from("assets/covers").join(url);
+    if relative.exists() {
+        return Some(relative);
+    }
+    let usr_share = PathBuf::from("/usr/share/spotify-light/assets/covers").join(url);
+    if usr_share.exists() {
+        return Some(usr_share);
+    }
     let path = url_to_path(url);
     if path.exists() {
         Some(path)
@@ -34,11 +46,11 @@ pub async fn load_image_path_async(url: &str) -> Option<PathBuf> {
     if url.is_empty() {
         return None;
     }
-    let path = url_to_path(url);
-    if path.exists() {
-        return Some(path);
+    if let Some(cached) = get_cached_image_path(url) {
+        return Some(cached);
     }
 
+    let path = url_to_path(url);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()

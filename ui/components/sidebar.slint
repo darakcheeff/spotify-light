@@ -174,8 +174,16 @@ export component Sidebar inherits Rectangle {
                             height: 44px;
                             border-radius: item.item_type == 2 ? 22px : 4px;
                             background: item.item_type == 3 ? #4c1d95 : (item.item_type == 4 ? #312e81 : (item.item_type == 1 ? #1e293b : (item.is_pinned ? #331f54 : #282828)));
+                            clip: true;
 
-                            Text {
+                            if item.has_cover : Image {
+                                width: 100%;
+                                height: 100%;
+                                source: item.cover;
+                                image-fit: cover;
+                            }
+
+                            if !item.has_cover : Text {
                                 text: item.item_type == 3 ? "♥" : (item.item_type == 2 ? "👤" : (item.item_type == 1 ? "💽" : (item.item_type == 4 ? "📻" : "♪")));
                                 color: item.item_type == 3 ? #f472b6 : (item.is_pinned ? #a855f7 : Theme.text-secondary);
                                 font-size: 18px;

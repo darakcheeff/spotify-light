@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme, TrackItem, PlaylistItem } from "../theme.slint";
 
 struct CategoryCard {
     title: string,
@@ -9,7 +9,14 @@ struct CategoryCard {
 export component BrowseView inherits Rectangle {
     background: transparent;
 
+    in property <string> search_query_text: "";
+    in property <[TrackItem]> search_tracks: [];
+    in property <[PlaylistItem]> search_artists: [];
+    in property <[PlaylistItem]> search_albums: [];
+
     callback category_clicked(string);
+    callback play_track(string);
+    callback select_item(string);
 
     property <[CategoryCard]> categories: [
         { title: "Музыка", color: #e1306c, icon: "🎵" },
@@ -31,70 +38,420 @@ export component BrowseView inherits Rectangle {
     ];
 
     Flickable {
-        content-height: 850px;
+        content-height: root.search_query_text == "" ? 850px : 1100px;
 
         VerticalLayout {
             padding-left: 24px;
             padding-right: 24px;
             padding-top: 20px;
             padding-bottom: 40px;
-            spacing: 20px;
+            spacing: 24px;
             alignment: start;
 
-            Text {
-                text: "Все остальное";
-                color: Theme.text-primary;
-                font-size: 24px;
-                font-weight: 800;
+            // ==========================================
+            // 1. EMPTY QUERY: CATEGORY BROWSE (6.png)
+            // ==========================================
+            if root.search_query_text == "" : VerticalLayout {
+                spacing: 20px;
+
+                Text {
+                    text: "Все остальное";
+                    color: Theme.text-primary;
+                    font-size: 24px;
+                    font-weight: 800;
+                }
+
+                // Grid of Categories (4 cards per row, 4 rows = 16 cards)
+                for row_idx in 4 : HorizontalLayout {
+                    spacing: 16px;
+                    height: 140px;
+
+                    for col_idx in 4 : Rectangle {
+                        property <int> card_idx: row_idx * 4 + col_idx;
+                        property <CategoryCard> card: root.categories[card_idx];
+
+                        horizontal-stretch: 1;
+                        height: 140px;
+                        border-radius: Theme.radius-medium;
+                        background: card.color;
+                        clip: true;
+
+                        // Title
+                        Text {
+                            x: 16px;
+                            y: 16px;
+                            text: card.title;
+                            color: #ffffff;
+                            font-size: 18px;
+                            font-weight: 800;
+                            width: parent.width - 70px;
+                            wrap: word-wrap;
+                        }
+
+                        // Decorative Icon Badge (rotated style like Spotify)
+                        Rectangle {
+                            x: parent.width - 64px;
+                            y: parent.height - 64px;
+                            width: 60px;
+                            height: 60px;
+                            border-radius: 6px;
+                            background: #00000044;
+
+                            Text {
+                                text: card.icon;
+                                font-size: 32px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        card_touch := TouchArea {
+                            clicked => {
+                                root.category_clicked(card.title);
+                            }
+                        }
+                    }
+                }
             }
 
-            // Grid of Categories (4 cards per row, 4 rows = 16 cards)
-            for row_idx in 4 : HorizontalLayout {
-                spacing: 16px;
-                height: 140px;
+            // ========================================================
+            // 2. ACTIVE SEARCH RESULTS (xpui-routes-search.js standard)
+            // ========================================================
+            if root.search_query_text != "" : VerticalLayout {
+                spacing: 28px;
 
-                for col_idx in 4 : Rectangle {
-                    property <int> card_idx: row_idx * 4 + col_idx;
-                    property <CategoryCard> card: root.categories[card_idx];
+                // Top Split: "Лучший результат" (Left) + "Треки" (Right)
+                HorizontalLayout {
+                    spacing: 24px;
+                    height: 240px;
 
-                    horizontal-stretch: 1;
-                    height: 140px;
-                    border-radius: Theme.radius-medium;
-                    background: card.color;
-                    clip: true;
+                    // Left Box: Лучший результат (Top Result, matching Spotify desktop)
+                    if root.search_tracks.length > 0 : Rectangle {
+                        width: 380px;
+                        height: 240px;
+                        border-radius: Theme.radius-medium;
+                        background: top_touch.has-hover ? #242424 : #181818;
 
-                    // Title
-                    Text {
-                        x: 16px;
-                        y: 16px;
-                        text: card.title;
-                        color: #ffffff;
-                        font-size: 18px;
-                        font-weight: 800;
-                        width: parent.width - 70px;
-                        wrap: word-wrap;
-                    }
+                        VerticalLayout {
+                            padding: 20px;
+                            spacing: 12px;
+                            alignment: start;
 
-                    // Decorative Icon Badge (rotated style like Spotify)
-                    Rectangle {
-                        x: parent.width - 64px;
-                        y: parent.height - 64px;
-                        width: 60px;
-                        height: 60px;
-                        border-radius: 6px;
-                        background: #00000044;
+                            Text {
+                                text: "Лучший результат";
+                                color: Theme.text-primary;
+                                font-size: 20px;
+                                font-weight: 800;
+                            }
 
-                        Text {
-                            text: card.icon;
-                            font-size: 32px;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
+                            Rectangle {
+                                width: 92px;
+                                height: 92px;
+                                border-radius: 6px;
+                                background: #282828;
+                                clip: true;
+
+                                if root.search_tracks[0].has_cover : Image {
+                                    width: 100%;
+                                    height: 100%;
+                                    source: root.search_tracks[0].cover;
+                                    image-fit: cover;
+                                }
+
+                                if !root.search_tracks[0].has_cover : Text {
+                                    text: "♪";
+                                    color: Theme.accent;
+                                    font-size: 36px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Text {
+                                text: root.search_tracks[0].title;
+                                color: Theme.text-primary;
+                                font-size: 24px;
+                                font-weight: 800;
+                                overflow: elide;
+                                width: 340px;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 10px;
+                                alignment: start;
+
+                                Rectangle {
+                                    width: 56px;
+                                    height: 24px;
+                                    border-radius: 12px;
+                                    background: #121212;
+
+                                    Text {
+                                        text: "ТРЕК";
+                                        color: #ffffff;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: root.search_tracks[0].artist;
+                                    color: Theme.text-secondary;
+                                    font-size: 14px;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        // Floating Play Button on hover (bottom right)
+                        if top_touch.has-hover : Rectangle {
+                            x: parent.width - 64px;
+                            y: parent.height - 64px;
+                            width: 48px;
+                            height: 48px;
+                            border-radius: 24px;
+                            background: Theme.accent;
+
+                            Text {
+                                text: "▶";
+                                color: #000000;
+                                font-size: 18px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        top_touch := TouchArea {
+                            clicked => { root.play_track(root.search_tracks[0].id); }
                         }
                     }
 
-                    card_touch := TouchArea {
-                        clicked => {
-                            root.category_clicked(card.title);
+                    // Right Box: Топ-4 трека
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 8px;
+
+                        Text {
+                            text: "Треки";
+                            color: Theme.text-primary;
+                            font-size: 20px;
+                            font-weight: 800;
+                        }
+
+                        for trk[idx] in root.search_tracks : Rectangle {
+                            if idx < 4 : Rectangle {
+                                height: 48px;
+                                border-radius: 4px;
+                                background: s_trk_touch.has-hover ? #2a2a2a : transparent;
+
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 12px;
+                                    spacing: 12px;
+                                    alignment: center;
+
+                                    Rectangle {
+                                        width: 40px;
+                                        height: 40px;
+                                        border-radius: 4px;
+                                        background: #282828;
+                                        clip: true;
+
+                                        if trk.has_cover : Image {
+                                            width: 100%;
+                                            height: 100%;
+                                            source: trk.cover;
+                                            image-fit: cover;
+                                        }
+                                        if !trk.has_cover : Text {
+                                            text: "♪";
+                                            color: Theme.accent;
+                                            font-size: 16px;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        alignment: center;
+                                        spacing: 2px;
+
+                                        Text {
+                                            text: trk.title;
+                                            color: Theme.text-primary;
+                                            font-size: 14px;
+                                            font-weight: 600;
+                                            overflow: elide;
+                                        }
+                                        Text {
+                                            text: trk.artist;
+                                            color: Theme.text-secondary;
+                                            font-size: 12px;
+                                            overflow: elide;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: trk.duration_str;
+                                        color: Theme.text-secondary;
+                                        font-size: 12px;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                s_trk_touch := TouchArea {
+                                    clicked => { root.play_track(trk.id); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Middle Shelf: "Исполнители"
+                if root.search_artists.length > 0 : VerticalLayout {
+                    spacing: 12px;
+
+                    Text {
+                        text: "Исполнители";
+                        color: Theme.text-primary;
+                        font-size: 20px;
+                        font-weight: 800;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 16px;
+                        alignment: start;
+
+                        for art in root.search_artists : Rectangle {
+                            width: 180px;
+                            height: 230px;
+                            border-radius: Theme.radius-medium;
+                            background: art_touch.has-hover ? #242424 : #181818;
+
+                            VerticalLayout {
+                                padding: 14px;
+                                spacing: 12px;
+                                alignment: center;
+
+                                Rectangle {
+                                    width: 120px;
+                                    height: 120px;
+                                    border-radius: 60px;
+                                    background: #282828;
+                                    clip: true;
+
+                                    if art.has_cover : Image {
+                                        width: 100%;
+                                        height: 100%;
+                                        source: art.cover;
+                                        image-fit: cover;
+                                    }
+                                    if !art.has_cover : Text {
+                                        text: "👤";
+                                        font-size: 44px;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: art.title;
+                                    color: Theme.text-primary;
+                                    font-size: 15px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    overflow: elide;
+                                    width: 152px;
+                                }
+
+                                Text {
+                                    text: "Исполнитель";
+                                    color: Theme.text-secondary;
+                                    font-size: 13px;
+                                    horizontal-alignment: center;
+                                }
+                            }
+
+                            art_touch := TouchArea {
+                                clicked => { root.select_item(art.id); }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom Shelf: "Альбомы и плейлисты"
+                if root.search_albums.length > 0 : VerticalLayout {
+                    spacing: 12px;
+
+                    Text {
+                        text: "Альбомы";
+                        color: Theme.text-primary;
+                        font-size: 20px;
+                        font-weight: 800;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 16px;
+                        alignment: start;
+
+                        for alb in root.search_albums : Rectangle {
+                            width: 180px;
+                            height: 230px;
+                            border-radius: Theme.radius-medium;
+                            background: alb_touch.has-hover ? #242424 : #181818;
+
+                            VerticalLayout {
+                                padding: 14px;
+                                spacing: 12px;
+                                alignment: center;
+
+                                Rectangle {
+                                    width: 120px;
+                                    height: 120px;
+                                    border-radius: 4px;
+                                    background: #282828;
+                                    clip: true;
+
+                                    if alb.has_cover : Image {
+                                        width: 100%;
+                                        height: 100%;
+                                        source: alb.cover;
+                                        image-fit: cover;
+                                    }
+                                    if !alb.has_cover : Text {
+                                        text: "💽";
+                                        font-size: 44px;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: alb.title;
+                                    color: Theme.text-primary;
+                                    font-size: 15px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    overflow: elide;
+                                    width: 152px;
+                                }
+
+                                Text {
+                                    text: alb.subtitle != "" ? alb.subtitle : "Альбом";
+                                    color: Theme.text-secondary;
+                                    font-size: 13px;
+                                    horizontal-alignment: center;
+                                    overflow: elide;
+                                    width: 152px;
+                                }
+                            }
+
+                            alb_touch := TouchArea {
+                                clicked => { root.select_item(alb.id); }
+                            }
                         }
                     }
                 }

@@ -113,11 +113,21 @@ export component TopBar inherits Rectangle {
                     alignment: center;
 
                     // Search Magnifying Glass
-                    Text {
-                        text: "🔍";
-                        font-size: 15px;
-                        color: #b3b3b3;
-                        vertical-alignment: center;
+                    Rectangle {
+                        width: 24px;
+                        height: 24px;
+                        Text {
+                            text: "🔍";
+                            font-size: 15px;
+                            color: #b3b3b3;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        TouchArea {
+                            clicked => {
+                                root.open_browse();
+                            }
+                        }
                     }
 
                     // Input & Placeholder

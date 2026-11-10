@@ -22,49 +22,77 @@ use api::{
     load_image_path_async, load_saved_credentials, save_credentials, SavedCredentials, SpotifyApiClient,
 };
 
-fn make_playlist_item(
-    id: String,
-    title: String,
-    subtitle: String,
-    is_pinned: bool,
-    is_active: bool,
-    item_type: i32,
-    image_url: String,
-) -> PlaylistItem {
+#[derive(Clone, Debug)]
+pub struct LocalPlaylistItem {
+    pub id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub is_pinned: bool,
+    pub is_active: bool,
+    pub item_type: i32,
+    pub image_url: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct LocalTrackItem {
+    pub id: String,
+    pub index: i32,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub duration_str: String,
+    pub play_count_str: String,
+    pub is_liked: bool,
+    pub is_playing: bool,
+    pub image_url: String,
+}
+
+fn to_slint_playlist(item: &LocalPlaylistItem) -> PlaylistItem {
+    let (cover, has_cover) = if let Some(path) = get_cached_image_path(&item.image_url) {
+        match slint::Image::load_from_path(&path) {
+            Ok(img) => (img, true),
+            Err(_) => (slint::Image::default(), false),
+        }
+    } else {
+        (slint::Image::default(), false)
+    };
+
     PlaylistItem {
-        id: id.into(),
-        title: title.into(),
-        subtitle: subtitle.into(),
-        is_pinned,
-        is_active,
-        item_type,
-        image_url: image_url.into(),
+        id: item.id.clone().into(),
+        title: item.title.clone().into(),
+        subtitle: item.subtitle.clone().into(),
+        is_pinned: item.is_pinned,
+        is_active: item.is_active,
+        item_type: item.item_type,
+        image_url: item.image_url.clone().into(),
+        cover,
+        has_cover,
     }
 }
 
-fn make_track_item(
-    id: String,
-    index: i32,
-    title: String,
-    artist: String,
-    album: String,
-    duration_str: String,
-    play_count_str: String,
-    is_liked: bool,
-    is_playing: bool,
-    image_url: String,
-) -> TrackItem {
+fn to_slint_track(item: &LocalTrackItem) -> TrackItem {
+    let (cover, has_cover) = if let Some(path) = get_cached_image_path(&item.image_url) {
+        match slint::Image::load_from_path(&path) {
+            Ok(img) => (img, true),
+            Err(_) => (slint::Image::default(), false),
+        }
+    } else {
+        (slint::Image::default(), false)
+    };
+
     TrackItem {
-        id: id.into(),
-        index,
-        title: title.into(),
-        artist: artist.into(),
-        album: album.into(),
-        duration_str: duration_str.into(),
-        play_count_str: play_count_str.into(),
-        is_liked,
-        is_playing,
-        image_url: image_url.into(),
+        id: item.id.clone().into(),
+        index: item.index,
+        title: item.title.clone().into(),
+        artist: item.artist.clone().into(),
+        album: item.album.clone().into(),
+        duration_str: item.duration_str.clone().into(),
+        play_count_str: item.play_count_str.clone().into(),
+        is_liked: item.is_liked,
+        is_playing: item.is_playing,
+        image_url: item.image_url.clone().into(),
+        cover,
+        has_cover,
     }
 }
 
@@ -81,20 +109,20 @@ fn parse_duration_to_secs(d_str: &str) -> f64 {
 
 async fn populate_library(
     client: SpotifyApiClient,
-    cached_playlists: Arc<Mutex<Vec<PlaylistItem>>>,
-    cached_albums: Arc<Mutex<Vec<PlaylistItem>>>,
-    cached_artists: Arc<Mutex<Vec<PlaylistItem>>>,
+    cached_playlists: Arc<Mutex<Vec<LocalPlaylistItem>>>,
+    cached_albums: Arc<Mutex<Vec<LocalPlaylistItem>>>,
+    cached_artists: Arc<Mutex<Vec<LocalPlaylistItem>>>,
     app_weak: slint::Weak<AppWindow>,
 ) {
     info!("[LIBRARY] Concurrently loading playlists, saved albums, and followed artists...");
 
-    // 1. Concurrently fetch playlists, saved albums, and artists
+    // 1. Concurrently fetch playlists
     let client_p = client.clone();
     let app_weak_p = app_weak.clone();
     let cached_p_clone = Arc::clone(&cached_playlists);
     tokio::spawn(async move {
         if let Ok(playlists) = client_p.get_playlists().await {
-            let items: Vec<PlaylistItem> = playlists.into_iter().map(|p| {
+            let local_items: Vec<LocalPlaylistItem> = playlists.into_iter().map(|p| {
                 let item_type = if p.title.contains("Любимые") || p.title.contains("Liked") {
                     3
                 } else if p.title.contains("радио") || p.title.contains("Radio") || p.title.contains("Killshot") {
@@ -104,16 +132,45 @@ async fn populate_library(
                 } else {
                     0
                 };
-                make_playlist_item(p.id, p.title, p.subtitle, item_type == 3, false, item_type, p.image_url)
+                LocalPlaylistItem {
+                    id: p.id,
+                    title: p.title,
+                    subtitle: p.subtitle,
+                    is_pinned: item_type == 3,
+                    is_active: false,
+                    item_type,
+                    image_url: p.image_url,
+                }
             }).collect();
 
-            info!("[LIBRARY] Playlists loaded: {}", items.len());
+            info!("[LIBRARY] Playlists loaded: {}", local_items.len());
             {
                 let mut guard = cached_p_clone.lock().await;
-                *guard = items.clone();
+                *guard = local_items.clone();
             }
+
+            // Trigger background download for uncached covers
+            for it in &local_items {
+                if !it.image_url.is_empty() && get_cached_image_path(&it.image_url).is_none() {
+                    let u = it.image_url.clone();
+                    let app_w = app_weak_p.clone();
+                    let c_p = Arc::clone(&cached_p_clone);
+                    tokio::spawn(async move {
+                        if let Some(_) = load_image_path_async(&u).await {
+                            let curr = c_p.lock().await.clone();
+                            let _ = app_w.upgrade_in_event_loop(move |ui| {
+                                let sl: Vec<PlaylistItem> = curr.iter().map(to_slint_playlist).collect();
+                                ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
+                            });
+                        }
+                    });
+                }
+            }
+
+            let for_ui = local_items.clone();
             let _ = app_weak_p.upgrade_in_event_loop(move |ui| {
-                ui.set_user_playlists(ModelRc::new(VecModel::from(items)));
+                let sl: Vec<PlaylistItem> = for_ui.iter().map(to_slint_playlist).collect();
+                ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
             });
         }
     });
@@ -124,24 +181,53 @@ async fn populate_library(
     let cached_p_ref = Arc::clone(&cached_playlists);
     tokio::spawn(async move {
         if let Ok(artists) = client_art.get_followed_artists().await {
-            let items: Vec<PlaylistItem> = artists.into_iter().map(|art| {
-                make_playlist_item(art.id, art.title, art.subtitle, false, false, 2, art.image_url)
+            let local_items: Vec<LocalPlaylistItem> = artists.into_iter().map(|art| {
+                LocalPlaylistItem {
+                    id: art.id,
+                    title: art.title,
+                    subtitle: art.subtitle,
+                    is_pinned: false,
+                    is_active: false,
+                    item_type: 2,
+                    image_url: art.image_url,
+                }
             }).collect();
 
-            info!("[LIBRARY] Followed artists loaded: {}", items.len());
+            info!("[LIBRARY] Followed artists loaded: {}", local_items.len());
             {
                 let mut guard = cached_art_clone.lock().await;
-                *guard = items.clone();
+                *guard = local_items.clone();
             }
+
+            for it in &local_items {
+                if !it.image_url.is_empty() && get_cached_image_path(&it.image_url).is_none() {
+                    let u = it.image_url.clone();
+                    let app_w = app_weak_art.clone();
+                    let c_p = Arc::clone(&cached_p_ref);
+                    let c_a = Arc::clone(&cached_art_clone);
+                    tokio::spawn(async move {
+                        if let Some(_) = load_image_path_async(&u).await {
+                            let mut all = c_p.lock().await.clone();
+                            all.extend(c_a.lock().await.clone());
+                            let _ = app_w.upgrade_in_event_loop(move |ui| {
+                                let sl: Vec<PlaylistItem> = all.iter().map(to_slint_playlist).collect();
+                                ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
+                            });
+                        }
+                    });
+                }
+            }
+
             // Merge into UI view if on "Все"
             let mut merged = Vec::new();
             {
                 let p = cached_p_ref.lock().await;
                 merged.extend(p.clone());
             }
-            merged.extend(items);
+            merged.extend(local_items);
             let _ = app_weak_art.upgrade_in_event_loop(move |ui| {
-                ui.set_user_playlists(ModelRc::new(VecModel::from(merged)));
+                let sl: Vec<PlaylistItem> = merged.iter().map(to_slint_playlist).collect();
+                ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
             });
         }
     });
@@ -150,13 +236,21 @@ async fn populate_library(
     let cached_alb_clone = Arc::clone(&cached_albums);
     tokio::spawn(async move {
         if let Ok(albums) = client_alb.get_saved_albums().await {
-            let items: Vec<PlaylistItem> = albums.into_iter().map(|a| {
-                make_playlist_item(a.id, a.title, a.subtitle, false, false, 1, a.image_url)
+            let local_items: Vec<LocalPlaylistItem> = albums.into_iter().map(|a| {
+                LocalPlaylistItem {
+                    id: a.id,
+                    title: a.title,
+                    subtitle: a.subtitle,
+                    is_pinned: false,
+                    is_active: false,
+                    item_type: 1,
+                    image_url: a.image_url,
+                }
             }).collect();
 
-            info!("[LIBRARY] Saved albums loaded: {}", items.len());
+            info!("[LIBRARY] Saved albums loaded: {}", local_items.len());
             let mut guard = cached_alb_clone.lock().await;
-            *guard = items;
+            *guard = local_items;
         }
     });
 
@@ -165,12 +259,26 @@ async fn populate_library(
     let app_weak_recent = app_weak.clone();
     tokio::spawn(async move {
         if let Ok(recents) = client_recent.get_recently_played().await {
-            let items: Vec<TrackItem> = recents.into_iter().map(|t| {
-                make_track_item(t.id, t.index, t.title, t.artist, t.album, t.duration_str, "".to_string(), false, false, t.image_url)
+            let local_items: Vec<LocalTrackItem> = recents.into_iter().map(|t| {
+                LocalTrackItem {
+                    id: t.id,
+                    index: t.index,
+                    title: t.title,
+                    artist: t.artist,
+                    album: t.album,
+                    duration_str: t.duration_str,
+                    play_count_str: String::new(),
+                    is_liked: false,
+                    is_playing: false,
+                    image_url: t.image_url,
+                }
             }).collect();
-            info!("[LIBRARY] Recently played tracks loaded: {}", items.len());
+
+            info!("[LIBRARY] Recently played tracks loaded: {}", local_items.len());
+            let items_ui = local_items.clone();
             let _ = app_weak_recent.upgrade_in_event_loop(move |ui| {
-                ui.set_recent_items(ModelRc::new(VecModel::from(items)));
+                let sl: Vec<TrackItem> = items_ui.iter().map(to_slint_track).collect();
+                ui.set_recent_items(ModelRc::new(VecModel::from(sl)));
             });
         }
     });
@@ -225,9 +333,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let active_api_client: Arc<Mutex<Option<SpotifyApiClient>>> = Arc::new(Mutex::new(None));
 
     // Shared library collections for instant filtering (Все, Плейлисты, Альбомы, Артисты)
-    let cached_playlists: Arc<Mutex<Vec<PlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
-    let cached_albums: Arc<Mutex<Vec<PlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
-    let cached_artists: Arc<Mutex<Vec<PlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let cached_playlists: Arc<Mutex<Vec<LocalPlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let cached_albums: Arc<Mutex<Vec<LocalPlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let cached_artists: Arc<Mutex<Vec<LocalPlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
 
     // Shared playback tracking state
     let playback_duration: Arc<Mutex<f64>> = Arc::new(Mutex::new(210.0));
@@ -480,7 +588,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     all.extend(art.clone());
                 }
 
-                let filtered: Vec<PlaylistItem> = if q.is_empty() {
+                let filtered: Vec<LocalPlaylistItem> = if q.is_empty() {
                     all
                 } else {
                     all.into_iter().filter(|item| {
@@ -489,7 +597,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_user_playlists(ModelRc::new(VecModel::from(filtered)));
+                    let sl: Vec<PlaylistItem> = filtered.iter().map(to_slint_playlist).collect();
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
                 });
             });
         }
@@ -513,30 +622,172 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(client) = client_opt {
                     if q.is_empty() {
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_global_search_query("".into());
                             ui.set_current_workspace(2);
                         });
                         return;
                     }
 
-                    // Switch view to Browse/Search (workspace 2)
-                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                        ui.set_current_workspace(2);
-                    });
-
                     match client.search(&q).await {
                         Ok(res) => {
-                            let app_weak_res = app_weak.clone();
-                            let _ = app_weak_res.upgrade_in_event_loop(move |ui| {
-                                let tracks: Vec<TrackItem> = res.tracks.into_iter().map(|t| {
-                                    make_track_item(t.id, t.index, t.title, t.artist, t.album, t.duration_str, "".to_string(), false, false, t.image_url)
-                                }).collect();
-                                ui.set_current_tracks(ModelRc::new(VecModel::from(tracks)));
+                            let local_tracks: Vec<LocalTrackItem> = res.tracks.into_iter().map(|t| {
+                                LocalTrackItem {
+                                    id: t.id,
+                                    index: t.index,
+                                    title: t.title,
+                                    artist: t.artist,
+                                    album: t.album,
+                                    duration_str: t.duration_str,
+                                    play_count_str: String::new(),
+                                    is_liked: false,
+                                    is_playing: false,
+                                    image_url: t.image_url,
+                                }
+                            }).collect();
+
+                            let local_artists: Vec<LocalPlaylistItem> = res.artists.into_iter().map(|a| {
+                                LocalPlaylistItem {
+                                    id: a.id,
+                                    title: a.title,
+                                    subtitle: a.subtitle,
+                                    is_pinned: false,
+                                    is_active: false,
+                                    item_type: 2,
+                                    image_url: a.image_url,
+                                }
+                            }).collect();
+
+                            let local_albums: Vec<LocalPlaylistItem> = res.albums.into_iter().map(|a| {
+                                LocalPlaylistItem {
+                                    id: a.id,
+                                    title: a.title,
+                                    subtitle: a.subtitle,
+                                    is_pinned: false,
+                                    is_active: false,
+                                    item_type: 1,
+                                    image_url: a.image_url,
+                                }
+                            }).collect();
+
+                            let q_copy = q.clone();
+                            let trk_ui = local_tracks.clone();
+                            let art_ui = local_artists.clone();
+                            let alb_ui = local_albums.clone();
+
+                            let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_current_workspace(2);
+                                ui.set_global_search_query(q_copy.into());
+                                let sl_tracks: Vec<TrackItem> = trk_ui.iter().map(to_slint_track).collect();
+                                let sl_artists: Vec<PlaylistItem> = art_ui.iter().map(to_slint_playlist).collect();
+                                let sl_albums: Vec<PlaylistItem> = alb_ui.iter().map(to_slint_playlist).collect();
+                                ui.set_search_results_tracks(ModelRc::new(VecModel::from(sl_tracks)));
+                                ui.set_search_results_artists(ModelRc::new(VecModel::from(sl_artists)));
+                                ui.set_search_results_albums(ModelRc::new(VecModel::from(sl_albums)));
                             });
                         }
                         Err(e) => {
                             error!("[API ERROR] Global search failed: {}", e);
                         }
                     }
+                } else {
+                    if q.is_empty() {
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_global_search_query("".into());
+                            ui.set_current_workspace(2);
+                        });
+                        return;
+                    }
+
+                    let sample_tracks = vec![
+                        LocalTrackItem {
+                            id: "spotify:track:4cOdK2wGLETKBW3PvgPWqT".into(),
+                            index: 1,
+                            title: format!("{} - Track 1", q),
+                            artist: "Daft Punk".into(),
+                            album: "Discovery".into(),
+                            duration_str: "3:44".into(),
+                            play_count_str: "1,245,678,901".into(),
+                            is_liked: false,
+                            is_playing: false,
+                            image_url: "https://i.scdn.co/image/ab67616d0000b273447936a29f8fba3d52718105".into(),
+                        },
+                        LocalTrackItem {
+                            id: "spotify:track:0VjIjW4GlUZAMYd2vXMi3b".into(),
+                            index: 2,
+                            title: format!("{} - Track 2", q),
+                            artist: "The Weeknd".into(),
+                            album: "After Hours".into(),
+                            duration_str: "3:20".into(),
+                            play_count_str: "3,892,100,234".into(),
+                            is_liked: true,
+                            is_playing: false,
+                            image_url: "https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36".into(),
+                        },
+                        LocalTrackItem {
+                            id: "spotify:track:7qiZfU4dY1lWllzX7mPBI3".into(),
+                            index: 3,
+                            title: format!("{} - Track 3", q),
+                            artist: "Ed Sheeran".into(),
+                            album: "÷ (Divide)".into(),
+                            duration_str: "3:53".into(),
+                            play_count_str: "3,500,432,100".into(),
+                            is_liked: false,
+                            is_playing: false,
+                            image_url: "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96".into(),
+                        },
+                        LocalTrackItem {
+                            id: "spotify:track:3n3Ppam7vgaVa1iaRUc9Lp".into(),
+                            index: 4,
+                            title: format!("{} - Track 4", q),
+                            artist: "The Killers".into(),
+                            album: "Hot Fuss".into(),
+                            duration_str: "3:42".into(),
+                            play_count_str: "1,980,123,456".into(),
+                            is_liked: false,
+                            is_playing: false,
+                            image_url: "https://i.scdn.co/image/ab67616d0000b273ffd9108c5c7d0d0c3ebaa58b".into(),
+                        },
+                    ];
+
+                    let sample_artists = vec![
+                        LocalPlaylistItem {
+                            id: "spotify:artist:06HL4z0CvFAxyc27GXpf02".into(),
+                            title: format!("Исполнитель: {}", q),
+                            subtitle: "Исполнитель • 85 432 100 слушателей за месяц".into(),
+                            is_pinned: false,
+                            is_active: false,
+                            item_type: 2,
+                            image_url: "https://i.scdn.co/image/ab6761610000e5eb4a86b97f0f622e96417b1b36".into(),
+                        },
+                    ];
+
+                    let sample_albums = vec![
+                        LocalPlaylistItem {
+                            id: "spotify:album:4yP0hdKOJeuMsxY99YIHR5".into(),
+                            title: format!("Альбом: {}", q),
+                            subtitle: "Альбом • 2024".into(),
+                            is_pinned: false,
+                            is_active: false,
+                            item_type: 1,
+                            image_url: "https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36".into(),
+                        },
+                    ];
+
+                    let q_copy = q.clone();
+                    let trk_ui = sample_tracks.clone();
+                    let art_ui = sample_artists.clone();
+                    let alb_ui = sample_albums.clone();
+
+                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_current_workspace(2);
+                        ui.set_global_search_query(q_copy.into());
+                        let sl_tracks: Vec<TrackItem> = trk_ui.iter().map(to_slint_track).collect();
+                        let sl_artists: Vec<PlaylistItem> = art_ui.iter().map(to_slint_playlist).collect();
+                        let sl_albums: Vec<PlaylistItem> = alb_ui.iter().map(to_slint_playlist).collect();
+                        ui.set_search_results_tracks(ModelRc::new(VecModel::from(sl_tracks)));
+                        ui.set_search_results_artists(ModelRc::new(VecModel::from(sl_artists)));
+                        ui.set_search_results_albums(ModelRc::new(VecModel::from(sl_albums)));
+                    });
                 }
             });
         }
@@ -672,7 +923,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     guard.clone()
                 };
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_user_playlists(ModelRc::new(VecModel::from(updated)));
+                    let sl: Vec<PlaylistItem> = updated.iter().map(to_slint_playlist).collect();
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
                 });
             });
         }
@@ -695,32 +947,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
                 if let Some(client) = client_opt {
                     if let Ok(new_pl) = client.create_playlist("Мой плейлист").await {
-                        let new_item = make_playlist_item(new_pl.id, new_pl.title, new_pl.subtitle, false, false, 0, new_pl.image_url);
+                        let new_item = LocalPlaylistItem {
+                            id: new_pl.id,
+                            title: new_pl.title,
+                            subtitle: new_pl.subtitle,
+                            is_pinned: false,
+                            is_active: false,
+                            item_type: 0,
+                            image_url: new_pl.image_url,
+                        };
                         let mut p = cached_p.lock().await;
                         p.insert(0, new_item);
                         let updated = p.clone();
                         let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                            ui.set_user_playlists(ModelRc::new(VecModel::from(updated)));
+                            let sl: Vec<PlaylistItem> = updated.iter().map(to_slint_playlist).collect();
+                            ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
                         });
+                        return;
                     }
                 }
-            });
-        }
-    });
-
-    // Sidebar Action: Create New Playlist
-    app.on_create_new_playlist({
-        let cached_p = Arc::clone(&cached_playlists);
-        let app_weak = app_weak.clone();
-        move || {
-            info!("[UI ACTION] Create new playlist requested");
-            let cached_p = Arc::clone(&cached_p);
-            let app_weak = app_weak.clone();
-            tokio::spawn(async move {
+                // Fallback for offline / unauthenticated
                 let new_item = {
                     let mut guard = cached_p.lock().await;
                     let count = guard.len() + 1;
-                    let item = make_playlist_item(format!("custom_{}", count), format!("Мой плейлист #{}", count), "Плейлист • Пользовательский".to_string(), false, false, 0, "".to_string());
+                    let item = LocalPlaylistItem {
+                        id: format!("custom_{}", count),
+                        title: format!("Мой плейлист #{}", count),
+                        subtitle: "Плейлист • Пользовательский".to_string(),
+                        is_pinned: false,
+                        is_active: false,
+                        item_type: 0,
+                        image_url: "".to_string(),
+                    };
                     guard.insert(0, item.clone());
                     item
                 };
@@ -729,9 +987,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     guard.clone()
                 };
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_user_playlists(ModelRc::new(VecModel::from(all)));
+                    let sl: Vec<PlaylistItem> = all.iter().map(to_slint_playlist).collect();
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
                     ui.set_current_workspace(1);
-                    ui.set_current_album_title(new_item.title);
+                    ui.set_current_album_title(new_item.title.into());
                     ui.set_current_tracks(ModelRc::new(VecModel::from(Vec::<TrackItem>::new())));
                 });
             });
@@ -753,22 +1012,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::spawn(async move {
                 let to_show = match filter_idx {
                     1 => {
-                        // Плейлисты
                         let p = cached_p.lock().await;
                         p.clone()
                     }
                     2 => {
-                        // Альбомы
                         let alb = cached_alb.lock().await;
                         alb.clone()
                     }
                     3 => {
-                        // Артисты
                         let art = cached_art.lock().await;
                         art.clone()
                     }
                     _ => {
-                        // Все (плейлисты + альбомы + артисты)
                         let mut all = Vec::new();
                         {
                             let p = cached_p.lock().await;
@@ -787,7 +1042,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_user_playlists(ModelRc::new(VecModel::from(to_show)));
+                    let sl: Vec<PlaylistItem> = to_show.iter().map(to_slint_playlist).collect();
+                    ui.set_user_playlists(ModelRc::new(VecModel::from(sl)));
                 });
             });
         }
@@ -872,6 +1128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 found_idx = idx as i32;
                                 ui.set_active_track_title(track.title.clone());
                                 ui.set_active_track_artist(track.artist.clone());
+                                ui.set_current_playing_track(track.clone());
                                 track_cover_url = track.image_url.to_string();
                                 if let Some(path) = get_cached_image_path(&track_cover_url) {
                                     if let Ok(img) = slint::Image::load_from_path(&path) {
@@ -896,6 +1153,66 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     if found_idx >= 0 {
                         ui.set_current_tracks(ModelRc::new(VecModel::from(updated_tracks)));
+                    } else {
+                        // Check search results tracks
+                        let search_tracks = ui.get_search_results_tracks();
+                        let mut updated_search = Vec::new();
+                        for idx in 0..search_tracks.row_count() {
+                            if let Some(mut track) = search_tracks.row_data(idx) {
+                                if track.id == tid_copy {
+                                    track.is_playing = true;
+                                    found_idx = idx as i32;
+                                    ui.set_active_track_title(track.title.clone());
+                                    ui.set_active_track_artist(track.artist.clone());
+                                    ui.set_current_playing_track(track.clone());
+                                    track_cover_url = track.image_url.to_string();
+                                    if let Some(path) = get_cached_image_path(&track_cover_url) {
+                                        if let Ok(img) = slint::Image::load_from_path(&path) {
+                                            ui.set_current_track_cover(img);
+                                            ui.set_has_current_track_cover(true);
+                                        } else {
+                                            ui.set_has_current_track_cover(false);
+                                        }
+                                    } else {
+                                        ui.set_has_current_track_cover(false);
+                                    }
+                                    if !track.duration_str.is_empty() {
+                                        ui.set_total_time(track.duration_str.clone());
+                                        dur_secs = parse_duration_to_secs(&track.duration_str);
+                                    }
+                                } else {
+                                    track.is_playing = false;
+                                }
+                                updated_search.push(track);
+                            }
+                        }
+                        if found_idx >= 0 {
+                            ui.set_search_results_tracks(ModelRc::new(VecModel::from(updated_search)));
+                        } else {
+                            // Check recent items
+                            let recents = ui.get_recent_items();
+                            for idx in 0..recents.row_count() {
+                                if let Some(track) = recents.row_data(idx) {
+                                    if track.id == tid_copy {
+                                        ui.set_active_track_title(track.title.clone());
+                                        ui.set_active_track_artist(track.artist.clone());
+                                        ui.set_current_playing_track(track.clone());
+                                        track_cover_url = track.image_url.to_string();
+                                        if let Some(path) = get_cached_image_path(&track_cover_url) {
+                                            if let Ok(img) = slint::Image::load_from_path(&path) {
+                                                ui.set_current_track_cover(img);
+                                                ui.set_has_current_track_cover(true);
+                                            }
+                                        }
+                                        if !track.duration_str.is_empty() {
+                                            ui.set_total_time(track.duration_str.clone());
+                                            dur_secs = parse_duration_to_secs(&track.duration_str);
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     if !track_cover_url.is_empty() {
@@ -1000,8 +1317,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     match tracks_res {
                         Ok(tracks) => {
-                            let slint_tracks: Vec<TrackItem> = tracks.into_iter().map(|t| {
-                                make_track_item(t.id, t.index, t.title, t.artist, t.album, t.duration_str, "".to_string(), false, false, t.image_url)
+                            let local_tracks: Vec<LocalTrackItem> = tracks.into_iter().map(|t| {
+                                LocalTrackItem {
+                                    id: t.id,
+                                    index: t.index,
+                                    title: t.title,
+                                    artist: t.artist,
+                                    album: t.album,
+                                    duration_str: t.duration_str,
+                                    play_count_str: String::new(),
+                                    is_liked: false,
+                                    is_playing: false,
+                                    image_url: t.image_url,
+                                }
                             }).collect();
 
                             let title_copy = found_title.clone();
@@ -1009,6 +1337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let type_copy = found_type.clone();
                             let cached_path = get_cached_image_path(&found_image_url);
                             let has_cover = cached_path.is_some();
+                            let local_copy = local_tracks.clone();
 
                             let _ = app_weak.upgrade_in_event_loop(move |ui| {
                                 ui.set_current_workspace(1);
@@ -1025,7 +1354,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 } else {
                                     ui.set_has_current_album_cover(false);
                                 }
-                                ui.set_current_tracks(ModelRc::new(VecModel::from(slint_tracks)));
+                                let sl: Vec<TrackItem> = local_copy.iter().map(to_slint_track).collect();
+                                ui.set_current_tracks(ModelRc::new(VecModel::from(sl)));
                             });
 
                             if !found_image_url.is_empty() && !has_cover {
@@ -1041,6 +1371,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         });
                                     }
                                 });
+                            }
+
+                            // Download any uncached track thumbnails
+                            for trk in &local_tracks {
+                                if !trk.image_url.is_empty() && get_cached_image_path(&trk.image_url).is_none() {
+                                    let u = trk.image_url.clone();
+                                    let app_w = app_weak.clone();
+                                    let all_t = local_tracks.clone();
+                                    tokio::spawn(async move {
+                                        if let Some(_) = load_image_path_async(&u).await {
+                                            let _ = app_w.upgrade_in_event_loop(move |ui| {
+                                                let sl: Vec<TrackItem> = all_t.iter().map(to_slint_track).collect();
+                                                ui.set_current_tracks(ModelRc::new(VecModel::from(sl)));
+                                            });
+                                        }
+                                    });
+                                }
                             }
                         }
                         Err(e) => {
@@ -1067,7 +1414,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut interval = tokio::time::interval(Duration::from_millis(250));
             loop {
                 interval.tick().await;
-                if p_act.load(Ordering::Relaxed) {
+                if p_act.load(Ordering::Relaxed) && engine.is_playing() {
                     let mut el = p_el.lock().await;
                     *el += 0.25;
                     let elapsed = *el;

@@ -263,8 +263,16 @@ export component AlbumView inherits Rectangle {
                                 height: 40px;
                                 border-radius: 4px;
                                 background: #282828;
+                                clip: true;
 
-                                Text {
+                                if trk.has_cover : Image {
+                                    width: 100%;
+                                    height: 100%;
+                                    source: trk.cover;
+                                    image-fit: cover;
+                                }
+
+                                if !trk.has_cover : Text {
                                     text: "♪";
                                     color: Theme.accent;
                                     font-size: 18px;

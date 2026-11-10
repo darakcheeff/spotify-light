@@ -53,8 +53,15 @@ export component AppWindow inherits Window {
     in-out property <image> current_track_cover;
     in-out property <bool> has_current_track_cover: false;
     in-out property <[TrackItem]> current_tracks: [];
+    in-out property <TrackItem> current_playing_track;
     in-out property <[TrackItem]> recent_items: [];
     in-out property <[DeviceItem]> discovered_devices: [];
+
+    // Global Search results state
+    in-out property <string> global_search_query: "";
+    in-out property <[TrackItem]> search_results_tracks: [];
+    in-out property <[PlaylistItem]> search_results_artists: [];
+    in-out property <[PlaylistItem]> search_results_albums: [];
 
     // Track playback state (synchronized with Audio Engine via event loop)
     in-out property <string> active_track_title: "";
@@ -105,6 +112,7 @@ export component AppWindow inherits Window {
             user_name: root.user_display_name;
             user_initial: root.user_initial;
             is_home_active: root.current_workspace == 0;
+            search_text <=> root.global_search_query;
             nav_back => {
                 if root.current_workspace > 0 {
                     root.current_workspace = 0;
@@ -119,6 +127,9 @@ export component AppWindow inherits Window {
                 root.is_lyrics_open = false;
             }
             search_changed(query) => {
+                root.current_workspace = 2;
+                root.is_lyrics_open = false;
+                root.global_search_query = query;
                 root.search_query(query);
             }
             profile_clicked => {
@@ -224,10 +235,22 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // View 4: Browse / Обзор View (matching 6.png)
+                // View 4: Browse / Обзор & Search View (matching 6.png & xpui-routes-search.js)
                 if !root.is_lyrics_open && root.current_workspace == 2 : BrowseView {
+                    search_query_text: root.global_search_query;
+                    search_tracks: root.search_results_tracks;
+                    search_artists: root.search_results_artists;
+                    search_albums: root.search_results_albums;
                     category_clicked(name) => {
+                        root.global_search_query = name;
                         root.search_query(name);
+                    }
+                    play_track(id) => {
+                        root.play_track(id);
+                    }
+                    select_item(id) => {
+                        root.current_workspace = 1;
+                        root.select_playlist(id);
                     }
                 }
 
@@ -244,6 +267,7 @@ export component AppWindow inherits Window {
                 mode: root.drawer_mode;
                 queue_tab <=> root.drawer_queue_tab;
                 devices: root.discovered_devices;
+                current_track: root.current_playing_track;
                 queue_items: root.current_tracks;
                 recent_items: root.recent_items;
                 close_drawer => { root.is_drawer_open = false; }

@@ -17,6 +17,11 @@ export component LoginDialog inherits Rectangle {
     callback login_via_browser();
     callback cancel();
 
+    // Backdrop touch to dismiss
+    TouchArea {
+        clicked => { root.cancel(); }
+    }
+
     // Dialog Card
     Rectangle {
         width: 460px;
@@ -25,6 +30,27 @@ export component LoginDialog inherits Rectangle {
         border-radius: Theme.radius-large;
         border-width: 1px;
         border-color: Theme.border-color;
+
+        // Top Right Close Button
+        Rectangle {
+            x: parent.width - self.width - 16px;
+            y: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: close_touch.has-hover ? Theme.background-hover : transparent;
+
+            Text {
+                text: "✕";
+                color: Theme.text-secondary;
+                font-size: 16px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            close_touch := TouchArea {
+                clicked => { root.cancel(); }
+            }
+        }
 
         VerticalLayout {
             padding: 32px;
@@ -355,15 +381,22 @@ export component LoginDialog inherits Rectangle {
 
             // Cancel / Close
             Rectangle {
-                height: 28px;
+                height: 32px;
+                background: cancel_touch.has-hover ? Theme.background-hover : transparent;
+                border-radius: 4px;
+
                 Text {
                     text: "Отмена";
-                    color: Theme.text-secondary;
+                    color: cancel_touch.has-hover ? Theme.text-primary : Theme.text-secondary;
                     font-size: 13px;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
-                TouchArea { clicked => { root.cancel(); } }
+                cancel_touch := TouchArea {
+                    width: 100%;
+                    height: 100%;
+                    clicked => { root.cancel(); }
+                }
             }
         }
     }

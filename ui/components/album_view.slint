@@ -6,6 +6,9 @@ export component AlbumView inherits Rectangle {
     in property <string> album_title: "";
     in property <string> album_type: "Плейлист";
     in property <string> album_desc: "";
+    in property <string> album_creator: "Spotify";
+    in property <image> album_cover;
+    in property <bool> has_album_cover: false;
     
     in property <[TrackItem]> tracks: [];
 
@@ -42,6 +45,15 @@ export component AlbumView inherits Rectangle {
                         background: #0f172a;
                         drop-shadow-blur: 24px;
                         drop-shadow-color: #000000;
+                        clip: true;
+
+                        Image {
+                            width: 100%;
+                            height: 100%;
+                            source: root.album_cover;
+                            image-fit: cover;
+                            visible: root.has_album_cover;
+                        }
 
                         Text {
                             text: "♪";
@@ -49,6 +61,7 @@ export component AlbumView inherits Rectangle {
                             font-size: 54px;
                             horizontal-alignment: center;
                             vertical-alignment: center;
+                            visible: !root.has_album_cover;
                         }
                     }
 

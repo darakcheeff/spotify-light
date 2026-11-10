@@ -5,12 +5,16 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
 use tracing::{error, info, warn};
 
+use librespot::connect::{ConnectConfig, Spirc};
+use librespot::core::authentication::Credentials;
+use librespot::core::config::DeviceType;
 use librespot::core::session::Session;
 use librespot::core::SpotifyUri;
 use librespot::playback::{
     audio_backend,
     config::{AudioFormat, PlayerConfig},
-    mixer::VolumeGetter,
+    mixer::softmixer::SoftMixer,
+    mixer::{Mixer, MixerConfig, VolumeGetter},
     player::Player,
 };
 
@@ -79,6 +83,9 @@ pub struct AudioEngine {
     volume: Arc<AtomicU64>,
     session: Arc<Mutex<Option<Session>>>,
     player: Arc<Mutex<Option<Arc<Player>>>>,
+    spirc: Arc<Mutex<Option<Spirc>>>,
+    device_id: Arc<Mutex<String>>,
+    target_device_id: Arc<Mutex<Option<String>>>,
 }
 
 impl AudioEngine {
@@ -88,6 +95,9 @@ impl AudioEngine {
         let volume = Arc::new(AtomicU64::new(f64::to_bits(0.8)));
         let session = Arc::new(Mutex::new(None));
         let player = Arc::new(Mutex::new(None));
+        let spirc = Arc::new(Mutex::new(None));
+        let device_id = Arc::new(Mutex::new(String::new()));
+        let target_device_id = Arc::new(Mutex::new(None));
 
         (
             Self {
@@ -96,6 +106,9 @@ impl AudioEngine {
                 volume,
                 session,
                 player,
+                spirc,
+                device_id,
+                target_device_id,
             },
             rx,
         )
@@ -105,22 +118,56 @@ impl AudioEngine {
         self.command_tx.clone()
     }
 
-    pub async fn init_session(&self, session: Session) {
-        info!("[AUDIO] Connecting native playback engine to Spotify AP session...");
+    pub async fn get_device_id(&self) -> String {
+        self.device_id.lock().await.clone()
+    }
+
+    pub async fn set_target_device_id(&self, target: Option<String>) {
+        let mut guard = self.target_device_id.lock().await;
+        *guard = target;
+    }
+
+    pub async fn get_target_device_id(&self) -> Option<String> {
+        self.target_device_id.lock().await.clone()
+    }
+
+    pub async fn init_session(&self, session: Session, credentials: Credentials) {
+        let dev_id = session.device_id().to_string();
+        info!("[AUDIO CONNECT] Initializing Spotify Connect Receiver for device '{}' (ID: {})...", "SpotifyLight", dev_id);
+
+        let connect_config = ConnectConfig {
+            name: "SpotifyLight".to_string(),
+            device_type: DeviceType::Computer,
+            ..Default::default()
+        };
+
+        let mixer_cfg = MixerConfig::default();
+        let mixer = match SoftMixer::open(mixer_cfg) {
+            Ok(m) => Arc::new(m),
+            Err(e) => {
+                error!("[AUDIO ERROR] Failed to initialize software mixer: {}", e);
+                return;
+            }
+        };
+
         if let Some(player) = create_player(session.clone(), Arc::clone(&self.volume)) {
             let mut event_channel = player.get_player_event_channel();
             let p_clone = Arc::clone(&player);
+            let is_p = Arc::clone(&self.is_playing);
             tokio::spawn(async move {
                 while let Some(event) = event_channel.recv().await {
                     match event {
                         librespot::playback::player::PlayerEvent::Playing { track_id, .. } => {
                             info!("[AUDIO EVENT] Playing track: {:?}", track_id);
+                            is_p.store(true, Ordering::Relaxed);
                         }
                         librespot::playback::player::PlayerEvent::Paused { track_id, .. } => {
                             info!("[AUDIO EVENT] Paused track: {:?}", track_id);
+                            is_p.store(false, Ordering::Relaxed);
                         }
                         librespot::playback::player::PlayerEvent::Stopped { track_id, .. } => {
                             info!("[AUDIO EVENT] Stopped track: {:?}", track_id);
+                            is_p.store(false, Ordering::Relaxed);
                         }
                         librespot::playback::player::PlayerEvent::Unavailable { track_id, .. } => {
                             warn!("[AUDIO EVENT] Track {:?} is unavailable or restricted by DRM; halting to prevent skip loop.", track_id);
@@ -130,6 +177,23 @@ impl AudioEngine {
                     }
                 }
             });
+
+            match Spirc::new(connect_config, session.clone(), credentials, Arc::clone(&player), mixer).await {
+                Ok((spirc, spirc_task)) => {
+                    tokio::spawn(spirc_task);
+                    info!("[AUDIO CONNECT SUCCESS] Spirc Connect Receiver online as 'SpotifyLight' ({})", dev_id);
+                    let mut sp_guard = self.spirc.lock().await;
+                    *sp_guard = Some(spirc);
+                }
+                Err(e) => {
+                    warn!("[AUDIO CONNECT WARNING] Could not start Spirc receiver: {}. Direct session playback will be used.", e);
+                }
+            }
+
+            {
+                let mut d_guard = self.device_id.lock().await;
+                *d_guard = dev_id;
+            }
 
             let mut p_guard = self.player.lock().await;
             *p_guard = Some(player);
@@ -145,30 +209,57 @@ impl AudioEngine {
         info!("Audio command dispatched: {:?}", cmd);
         match &cmd {
             AudioCommand::Play => {
-                let p_guard = self.player.lock().await;
-                if let Some(p) = p_guard.as_ref() {
-                    p.play();
-                    self.is_playing.store(true, Ordering::Relaxed);
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.play();
+                } else {
+                    let p_guard = self.player.lock().await;
+                    if let Some(p) = p_guard.as_ref() {
+                        p.play();
+                    }
                 }
+                self.is_playing.store(true, Ordering::Relaxed);
             }
             AudioCommand::Pause => {
-                let p_guard = self.player.lock().await;
-                if let Some(p) = p_guard.as_ref() {
-                    p.pause();
-                    self.is_playing.store(false, Ordering::Relaxed);
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.pause();
+                } else {
+                    let p_guard = self.player.lock().await;
+                    if let Some(p) = p_guard.as_ref() {
+                        p.pause();
+                    }
                 }
+                self.is_playing.store(false, Ordering::Relaxed);
             }
             AudioCommand::Toggle => {
-                let playing = self.is_playing.load(Ordering::Relaxed);
-                let p_guard = self.player.lock().await;
-                if let Some(p) = p_guard.as_ref() {
-                    if playing {
-                        p.pause();
-                        self.is_playing.store(false, Ordering::Relaxed);
-                    } else {
-                        p.play();
-                        self.is_playing.store(true, Ordering::Relaxed);
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.play_pause();
+                } else {
+                    let playing = self.is_playing.load(Ordering::Relaxed);
+                    let p_guard = self.player.lock().await;
+                    if let Some(p) = p_guard.as_ref() {
+                        if playing {
+                            p.pause();
+                            self.is_playing.store(false, Ordering::Relaxed);
+                        } else {
+                            p.play();
+                            self.is_playing.store(true, Ordering::Relaxed);
+                        }
                     }
+                }
+            }
+            AudioCommand::Next => {
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.next();
+                }
+            }
+            AudioCommand::Prev => {
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.prev();
                 }
             }
             AudioCommand::LoadUri(uri) => {
@@ -189,14 +280,23 @@ impl AudioEngine {
                 }
             }
             AudioCommand::Seek(pos) => {
-                let p_guard = self.player.lock().await;
-                if let Some(p) = p_guard.as_ref() {
-                    p.seek((*pos * 1000.0) as u32);
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.set_position_ms((*pos * 1000.0) as u32);
+                } else {
+                    let p_guard = self.player.lock().await;
+                    if let Some(p) = p_guard.as_ref() {
+                        p.seek((*pos * 1000.0) as u32);
+                    }
                 }
             }
             AudioCommand::SetVolume(vol) => {
                 let clamped = (*vol as f64).clamp(0.0, 1.0);
                 self.volume.store(f64::to_bits(clamped), Ordering::Relaxed);
+                let sp_guard = self.spirc.lock().await;
+                if let Some(sp) = sp_guard.as_ref() {
+                    let _ = sp.set_volume((clamped * 65535.0) as u16);
+                }
                 info!("[AUDIO] Hardware/Software volume scaled to {:.2}", clamped);
             }
             AudioCommand::RecoverSink => {
@@ -210,7 +310,6 @@ impl AudioEngine {
                     }
                 }
             }
-            _ => {}
         }
         let _ = self.command_tx.send(cmd).await;
     }
@@ -241,7 +340,6 @@ impl AudioEngine {
                         attempts += 1;
                         info!("Attempting to reconnect audio sink (attempt #{})...", attempts);
 
-                        // Try re-probing and re-opening the PipeWire/PulseAudio output stream
                         if Self::probe_audio_sink() {
                             info!("Audio output successfully re-established!");
                             current_state = AudioSinkState::Active;
@@ -262,7 +360,6 @@ impl AudioEngine {
                 }
                 other_cmd => {
                     info!("Executing audio engine command: {:?}", other_cmd);
-                    // Check health
                     if !Self::probe_audio_sink() {
                         let _ = command_tx.send(AudioCommand::RecoverSink).await;
                     }

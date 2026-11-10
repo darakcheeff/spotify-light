@@ -15,6 +15,9 @@ export component PlayerBar inherits Rectangle {
     in property <bool> is_repeat: false;
     in property <float> volume: 0.8; // 0.0 .. 1.0
     
+    in property <image> track_cover;
+    in property <bool> has_cover: false;
+
     in property <bool> lyrics_open: false;
     in property <bool> queue_open: false;
     in property <bool> devices_open: false;
@@ -50,6 +53,15 @@ export component PlayerBar inherits Rectangle {
                 height: 56px;
                 border-radius: 4px;
                 background: #282828;
+                clip: true;
+
+                Image {
+                    width: 100%;
+                    height: 100%;
+                    source: root.track_cover;
+                    image-fit: cover;
+                    visible: root.has_cover;
+                }
 
                 Text {
                     text: root.track_title != "" ? "♪" : "";
@@ -57,6 +69,7 @@ export component PlayerBar inherits Rectangle {
                     color: Theme.text-secondary;
                     horizontal-alignment: center;
                     vertical-alignment: center;
+                    visible: !root.has_cover;
                 }
             }
 

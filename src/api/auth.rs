@@ -24,6 +24,7 @@ pub struct SimplePlaylist {
     pub title: String,
     pub subtitle: String,
     pub track_count: i32,
+    pub image_url: String,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,29 @@ pub struct SimpleTrack {
     pub artist: String,
     pub album: String,
     pub duration_str: String,
+    pub image_url: String,
+}
+
+pub fn extract_image_url(val: &serde_json::Value) -> String {
+    val.get("images")
+        .and_then(|imgs| imgs.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|img| img.get("url"))
+        .and_then(|u| u.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+pub fn extract_track_image_url(val: &serde_json::Value) -> String {
+    if let Some(url) = val.get("album")
+        .and_then(|a| a.get("images"))
+        .and_then(|imgs| imgs.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|img| img.get("url"))
+        .and_then(|u| u.as_str()) {
+        return url.to_string();
+    }
+    extract_image_url(val)
 }
 
 pub fn get_credentials_path() -> Option<PathBuf> {
@@ -414,6 +438,7 @@ impl SpotifyApiClient {
                                 let mut title = format!("Плейлист {}", pid);
                                 let mut count = 0;
 
+                                let mut image_url = "".to_string();
                                 if let Ok(pres) = client.get(&p_url)
                                     .bearer_auth(&token)
                                     .header("Accept", "application/json")
@@ -427,6 +452,7 @@ impl SpotifyApiClient {
                                         if let Some(len) = pjson.get("length").and_then(|l| l.as_i64()) {
                                             count = len as i32;
                                         }
+                                        image_url = extract_image_url(&pjson);
                                     }
                                 }
 
@@ -435,6 +461,7 @@ impl SpotifyApiClient {
                                     title,
                                     subtitle: format!("Плейлист • {} треков", count),
                                     track_count: count,
+                                    image_url,
                                 }
                             }));
                         }
@@ -471,11 +498,13 @@ impl SpotifyApiClient {
                     .and_then(|n| n.as_u64())
                     .unwrap_or(0) as i32;
 
+                let image_url = extract_image_url(item);
                 list.push(SimplePlaylist {
                     id,
                     title: name,
                     subtitle: format!("Плейлист • {} треков", total_tracks),
                     track_count: total_tracks,
+                    image_url,
                 });
             }
         }
@@ -502,12 +531,14 @@ impl SpotifyApiClient {
                         let uri = item.get("uri").and_then(|u| u.as_str()).unwrap_or_default();
                         let name = item.get("name").and_then(|n| n.as_str()).unwrap_or_default();
                         let id = uri.strip_prefix("spotify:artist:").unwrap_or(uri).to_string();
+                        let image_url = extract_image_url(item);
                         if !id.is_empty() && !name.is_empty() {
                             artists.push(SimplePlaylist {
                                 id,
                                 title: name.to_string(),
                                 subtitle: "Исполнитель".to_string(),
                                 track_count: 0,
+                                image_url,
                             });
                         }
                     }
@@ -541,12 +572,14 @@ impl SpotifyApiClient {
                             let total_tracks = album.get("total_tracks")
                                 .and_then(|n| n.as_u64())
                                 .unwrap_or(0) as i32;
+                            let image_url = extract_image_url(album);
 
                             list.push(SimplePlaylist {
                                 id,
                                 title: name,
                                 subtitle: format!("Альбом • {}", artist),
                                 track_count: total_tracks,
+                                image_url,
                             });
                         }
                     }
@@ -628,6 +661,7 @@ impl SpotifyApiClient {
                                     artist,
                                     album: "".to_string(),
                                     duration_str: "".to_string(),
+                                    image_url: "".to_string(),
                                 }
                             }));
                         }
@@ -658,6 +692,7 @@ impl SpotifyApiClient {
                                                         if let Some(d_ms) = t_val.get("duration_ms").and_then(|d| d.as_u64()) {
                                                             t_item.duration_str = format!("{}:{:02}", d_ms / 60000, (d_ms % 60000) / 1000);
                                                         }
+                                                        t_item.image_url = extract_track_image_url(t_val);
                                                     }
                                                 }
                                             }
@@ -700,6 +735,7 @@ impl SpotifyApiClient {
                         .to_string();
                     let duration_ms = track.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
                     let duration_str = format!("{}:{:02}", duration_ms / 60000, (duration_ms % 60000) / 1000);
+                    let image_url = extract_track_image_url(track);
 
                     tracks.push(SimpleTrack {
                         id,
@@ -708,6 +744,7 @@ impl SpotifyApiClient {
                         artist,
                         album,
                         duration_str,
+                        image_url,
                     });
                 }
             }
@@ -746,6 +783,7 @@ impl SpotifyApiClient {
                                     artist,
                                     album: album_title.clone(),
                                     duration_str: "3:30".to_string(),
+                                    image_url: "".to_string(),
                                 });
                                 idx += 1;
                             }
@@ -785,6 +823,7 @@ impl SpotifyApiClient {
                             artist,
                             album: "".to_string(),
                             duration_str,
+                            image_url: "".to_string(),
                         });
                     }
                 }
@@ -827,6 +866,7 @@ impl SpotifyApiClient {
                                     artist: artist_name.clone(),
                                     album: playcount,
                                     duration_str: "3:30".to_string(),
+                                    image_url: "".to_string(),
                                 });
                                 idx += 1;
                             }
@@ -863,6 +903,7 @@ impl SpotifyApiClient {
                             .to_string();
                         let duration_ms = item.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
                         let duration_str = format!("{}:{:02}", duration_ms / 60000, (duration_ms % 60000) / 1000);
+                        let image_url = extract_track_image_url(item);
 
                         list.push(SimpleTrack {
                             id,
@@ -871,6 +912,7 @@ impl SpotifyApiClient {
                             artist,
                             album,
                             duration_str,
+                            image_url,
                         });
                     }
                 }
@@ -912,6 +954,7 @@ impl SpotifyApiClient {
                     .to_string();
                 let duration_ms = item.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
                 let duration_str = format!("{}:{:02}", duration_ms / 60000, (duration_ms % 60000) / 1000);
+                let image_url = extract_track_image_url(item);
 
                 res.tracks.push(SimpleTrack {
                     id,
@@ -920,6 +963,7 @@ impl SpotifyApiClient {
                     artist,
                     album,
                     duration_str,
+                    image_url,
                 });
             }
         }
@@ -929,11 +973,13 @@ impl SpotifyApiClient {
                 let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                 let title = item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                 let followers = item.get("followers").and_then(|f| f.get("total")).and_then(|t| t.as_u64()).unwrap_or(0);
+                let image_url = extract_image_url(item);
                 res.artists.push(SimplePlaylist {
                     id,
                     title,
                     subtitle: format!("Исполнитель • {} слушателей", followers),
                     track_count: 0,
+                    image_url,
                 });
             }
         }
@@ -949,11 +995,13 @@ impl SpotifyApiClient {
                     .and_then(|v| v.as_str())
                     .unwrap_or("Альбом")
                     .to_string();
+                let image_url = extract_image_url(item);
                 res.albums.push(SimplePlaylist {
                     id,
                     title,
                     subtitle: format!("Альбом • {}", artist),
                     track_count: 0,
+                    image_url,
                 });
             }
         }
@@ -963,11 +1011,13 @@ impl SpotifyApiClient {
                 let id = item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                 let title = item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                 let owner = item.get("owner").and_then(|o| o.get("display_name")).and_then(|v| v.as_str()).unwrap_or("Spotify");
+                let image_url = extract_image_url(item);
                 res.playlists.push(SimplePlaylist {
                     id,
                     title,
                     subtitle: format!("Плейлист • {}", owner),
                     track_count: 0,
+                    image_url,
                 });
             }
         }
@@ -1001,6 +1051,7 @@ impl SpotifyApiClient {
                         .to_string();
                     let duration_ms = track.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
                     let duration_str = format!("{}:{:02}", duration_ms / 60000, (duration_ms % 60000) / 1000);
+                    let image_url = extract_track_image_url(track);
 
                     list.push(SimpleTrack {
                         id,
@@ -1009,6 +1060,7 @@ impl SpotifyApiClient {
                         artist,
                         album,
                         duration_str,
+                        image_url,
                     });
                 }
             }
@@ -1100,6 +1152,7 @@ impl SpotifyApiClient {
                 title,
                 subtitle: "Плейлист • Вы".to_string(),
                 track_count: 0,
+                image_url: "".to_string(),
             })
         } else {
             let err = res.text().await.unwrap_or_default();

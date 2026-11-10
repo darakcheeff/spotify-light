@@ -46,6 +46,12 @@ export component AppWindow inherits Window {
     // Real dynamic collections
     in-out property <[PlaylistItem]> user_playlists: [];
     in-out property <string> current_album_title: "";
+    in-out property <string> current_album_type: "Плейлист";
+    in-out property <string> current_album_creator: "Spotify";
+    in-out property <image> current_album_cover;
+    in-out property <bool> has_current_album_cover: false;
+    in-out property <image> current_track_cover;
+    in-out property <bool> has_current_track_cover: false;
     in-out property <[TrackItem]> current_tracks: [];
     in-out property <[TrackItem]> recent_items: [];
     in-out property <[DeviceItem]> discovered_devices: [];
@@ -70,6 +76,7 @@ export component AppWindow inherits Window {
     callback seek_position(float);
     callback change_volume(float);
     callback select_connect_device(string);
+    callback refresh_devices();
     callback search_query(string);
     callback library_search_query(string);
     callback select_playlist(string);
@@ -185,6 +192,10 @@ export component AppWindow inherits Window {
                 // View 3: Album / Playlist View (matching 7.png / 8.png)
                 if !root.is_lyrics_open && root.current_workspace == 1 : AlbumView {
                     album_title: root.current_album_title;
+                    album_type: root.current_album_type;
+                    album_creator: root.current_album_creator;
+                    album_cover: root.current_album_cover;
+                    has_album_cover: root.has_current_album_cover;
                     tracks: root.current_tracks;
                     play_all => {
                         if (root.current_tracks.length > 0) {
@@ -245,6 +256,8 @@ export component AppWindow inherits Window {
         PlayerBar {
             track_title: root.active_track_title;
             track_artist: root.active_track_artist;
+            track_cover: root.current_track_cover;
+            has_cover: root.has_current_track_cover;
             current_time_str: root.current_time;
             total_time_str: root.total_time;
             progress: root.track_progress;
@@ -287,6 +300,7 @@ export component AppWindow inherits Window {
                 } else {
                     root.is_drawer_open = true;
                     root.drawer_mode = 1;
+                    root.refresh_devices();
                 }
             }
         }

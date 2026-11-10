@@ -18,9 +18,55 @@ use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
 use api::{
-    clear_saved_credentials, connect_with_password, connect_with_token, load_saved_credentials,
-    save_credentials, SavedCredentials, SpotifyApiClient,
+    clear_saved_credentials, connect_with_password, connect_with_token, get_cached_image_path,
+    load_image_path_async, load_saved_credentials, save_credentials, SavedCredentials, SpotifyApiClient,
 };
+
+fn make_playlist_item(
+    id: String,
+    title: String,
+    subtitle: String,
+    is_pinned: bool,
+    is_active: bool,
+    item_type: i32,
+    image_url: String,
+) -> PlaylistItem {
+    PlaylistItem {
+        id: id.into(),
+        title: title.into(),
+        subtitle: subtitle.into(),
+        is_pinned,
+        is_active,
+        item_type,
+        image_url: image_url.into(),
+    }
+}
+
+fn make_track_item(
+    id: String,
+    index: i32,
+    title: String,
+    artist: String,
+    album: String,
+    duration_str: String,
+    play_count_str: String,
+    is_liked: bool,
+    is_playing: bool,
+    image_url: String,
+) -> TrackItem {
+    TrackItem {
+        id: id.into(),
+        index,
+        title: title.into(),
+        artist: artist.into(),
+        album: album.into(),
+        duration_str: duration_str.into(),
+        play_count_str: play_count_str.into(),
+        is_liked,
+        is_playing,
+        image_url: image_url.into(),
+    }
+}
 
 fn parse_duration_to_secs(d_str: &str) -> f64 {
     let parts: Vec<&str> = d_str.split(':').collect();
@@ -58,15 +104,7 @@ async fn populate_library(
                 } else {
                     0
                 };
-                PlaylistItem {
-                    id: p.id.into(),
-                    title: p.title.into(),
-                    subtitle: p.subtitle.into(),
-                    is_pinned: item_type == 3,
-                    is_active: false,
-                    item_type,
-                    image_url: "".into(),
-                }
+                make_playlist_item(p.id, p.title, p.subtitle, item_type == 3, false, item_type, p.image_url)
             }).collect();
 
             info!("[LIBRARY] Playlists loaded: {}", items.len());
@@ -87,15 +125,7 @@ async fn populate_library(
     tokio::spawn(async move {
         if let Ok(artists) = client_art.get_followed_artists().await {
             let items: Vec<PlaylistItem> = artists.into_iter().map(|art| {
-                PlaylistItem {
-                    id: art.id.into(),
-                    title: art.title.into(),
-                    subtitle: art.subtitle.into(),
-                    is_pinned: false,
-                    is_active: false,
-                    item_type: 2,
-                    image_url: "".into(),
-                }
+                make_playlist_item(art.id, art.title, art.subtitle, false, false, 2, art.image_url)
             }).collect();
 
             info!("[LIBRARY] Followed artists loaded: {}", items.len());
@@ -121,15 +151,7 @@ async fn populate_library(
     tokio::spawn(async move {
         if let Ok(albums) = client_alb.get_saved_albums().await {
             let items: Vec<PlaylistItem> = albums.into_iter().map(|a| {
-                PlaylistItem {
-                    id: a.id.into(),
-                    title: a.title.into(),
-                    subtitle: a.subtitle.into(),
-                    is_pinned: false,
-                    is_active: false,
-                    item_type: 1,
-                    image_url: "".into(),
-                }
+                make_playlist_item(a.id, a.title, a.subtitle, false, false, 1, a.image_url)
             }).collect();
 
             info!("[LIBRARY] Saved albums loaded: {}", items.len());
@@ -143,17 +165,8 @@ async fn populate_library(
     let app_weak_recent = app_weak.clone();
     tokio::spawn(async move {
         if let Ok(recents) = client_recent.get_recently_played().await {
-            let items: Vec<TrackItem> = recents.into_iter().map(|t| TrackItem {
-                id: t.id.into(),
-                index: t.index,
-                title: t.title.into(),
-                artist: t.artist.into(),
-                album: t.album.into(),
-                duration_str: t.duration_str.into(),
-                play_count_str: "".into(),
-                is_liked: false,
-                is_playing: false,
-                image_url: "".into(),
+            let items: Vec<TrackItem> = recents.into_iter().map(|t| {
+                make_track_item(t.id, t.index, t.title, t.artist, t.album, t.duration_str, "".to_string(), false, false, t.image_url)
             }).collect();
             info!("[LIBRARY] Recently played tracks loaded: {}", items.len());
             let _ = app_weak_recent.upgrade_in_event_loop(move |ui| {
@@ -380,8 +393,63 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    app.on_select_connect_device(move |device_id| {
-        info!("[UI ACTION] Playback device selected: {}", device_id);
+    app.on_select_connect_device({
+        let engine = audio_sender.clone();
+        let app_weak = app_weak.clone();
+        move |device_id| {
+            let did = device_id.to_string();
+            info!("[UI ACTION] Playback device selected: {}", did);
+            let engine = engine.clone();
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                if did.is_empty() {
+                    engine.set_target_device_id(None).await;
+                } else {
+                    engine.set_target_device_id(Some(did.clone())).await;
+                }
+                let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                    let model = ui.get_discovered_devices();
+                    let mut updated = Vec::new();
+                    for i in 0..model.row_count() {
+                        if let Some(mut d) = model.row_data(i) {
+                            d.is_active = d.id == did;
+                            updated.push(d);
+                        }
+                    }
+                    ui.set_discovered_devices(ModelRc::new(VecModel::from(updated)));
+                });
+            });
+        }
+    });
+
+    app.on_refresh_devices({
+        let api_client_lock = Arc::clone(&active_api_client);
+        let app_weak = app_weak.clone();
+        move || {
+            let api_client_lock = Arc::clone(&api_client_lock);
+            let app_weak = app_weak.clone();
+            tokio::spawn(async move {
+                let maybe_client = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+                if let Some(client) = maybe_client {
+                    if let Ok(devs) = client.get_devices().await {
+                        let items: Vec<DeviceItem> = devs.into_iter().map(|(id, name, dtype, active)| {
+                            DeviceItem {
+                                id: id.into(),
+                                name: name.into(),
+                                device_type: dtype.into(),
+                                is_active: active,
+                            }
+                        }).collect();
+                        let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_discovered_devices(ModelRc::new(VecModel::from(items)));
+                        });
+                    }
+                }
+            });
+        }
     });
 
     // 1. Library Search (Local Sidebar Filter)
@@ -459,17 +527,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Ok(res) => {
                             let app_weak_res = app_weak.clone();
                             let _ = app_weak_res.upgrade_in_event_loop(move |ui| {
-                                let tracks: Vec<TrackItem> = res.tracks.into_iter().map(|t| TrackItem {
-                                    id: t.id.into(),
-                                    index: t.index,
-                                    title: t.title.into(),
-                                    artist: t.artist.into(),
-                                    album: t.album.into(),
-                                    duration_str: t.duration_str.into(),
-                                    play_count_str: "".into(),
-                                    is_liked: false,
-                                    is_playing: false,
-                                    image_url: "".into(),
+                                let tracks: Vec<TrackItem> = res.tracks.into_iter().map(|t| {
+                                    make_track_item(t.id, t.index, t.title, t.artist, t.album, t.duration_str, "".to_string(), false, false, t.image_url)
                                 }).collect();
                                 ui.set_current_tracks(ModelRc::new(VecModel::from(tracks)));
                             });
@@ -636,15 +695,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
                 if let Some(client) = client_opt {
                     if let Ok(new_pl) = client.create_playlist("Мой плейлист").await {
-                        let new_item = PlaylistItem {
-                            id: new_pl.id.into(),
-                            title: new_pl.title.into(),
-                            subtitle: new_pl.subtitle.into(),
-                            image_url: "".into(),
-                            item_type: 0,
-                            is_pinned: false,
-                            is_active: false,
-                        };
+                        let new_item = make_playlist_item(new_pl.id, new_pl.title, new_pl.subtitle, false, false, 0, new_pl.image_url);
                         let mut p = cached_p.lock().await;
                         p.insert(0, new_item);
                         let updated = p.clone();
@@ -669,15 +720,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let new_item = {
                     let mut guard = cached_p.lock().await;
                     let count = guard.len() + 1;
-                    let item = PlaylistItem {
-                        id: format!("custom_{}", count).into(),
-                        title: format!("Мой плейлист #{}", count).into(),
-                        subtitle: "Плейлист • Пользовательский".into(),
-                        is_pinned: false,
-                        is_active: false,
-                        item_type: 0,
-                        image_url: "".into(),
-                    };
+                    let item = make_playlist_item(format!("custom_{}", count), format!("Мой плейлист #{}", count), "Плейлист • Пользовательский".to_string(), false, false, 0, "".to_string());
                     guard.insert(0, item.clone());
                     item
                 };
@@ -752,6 +795,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     app.on_play_track({
         let engine = audio_sender.clone();
+        let api_client_lock = Arc::clone(&active_api_client);
         let app_weak = app_weak.clone();
         let p_dur = Arc::clone(&playback_duration);
         let p_el = Arc::clone(&playback_elapsed);
@@ -760,6 +804,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         move |track_id| {
             info!("[UI ACTION] Play track clicked: {}", track_id);
             let engine = engine.clone();
+            let api_client_lock = Arc::clone(&api_client_lock);
             let app_weak = app_weak.clone();
             let tid = track_id.to_string();
             let p_dur = Arc::clone(&p_dur);
@@ -768,14 +813,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let a_idx = Arc::clone(&a_idx);
 
             tokio::spawn(async move {
-                let spotify_uri = format!("spotify:track:{}", tid);
-                engine.send_command(AudioCommand::LoadUri(spotify_uri)).await;
+                let spotify_uri = if tid.starts_with("spotify:track:") {
+                    tid.clone()
+                } else {
+                    format!("spotify:track:{}", tid)
+                };
+
+                let maybe_client = {
+                    let guard = api_client_lock.lock().await;
+                    guard.clone()
+                };
+
+                let my_dev_id = engine.get_device_id().await;
+                let target_dev = engine.get_target_device_id().await;
+                let effective_dev_id = target_dev.as_ref().map(|s| s.as_str()).or_else(|| {
+                    if !my_dev_id.is_empty() {
+                        Some(my_dev_id.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                let mut played_via_api = false;
+                if let Some(client) = maybe_client {
+                    info!("[AUDIO HYBRID] Directing playback of '{}' to Spotify device {:?}...", spotify_uri, effective_dev_id);
+                    if let Ok(_) = client.play_uri_on_device(&spotify_uri, effective_dev_id).await {
+                        played_via_api = true;
+                    }
+                }
+
+                if !played_via_api {
+                    info!("[AUDIO FALLBACK] Loading track '{}' via AP engine...", spotify_uri);
+                    engine.send_command(AudioCommand::LoadUri(spotify_uri.clone())).await;
+                }
+
                 p_act.store(true, Ordering::Relaxed);
                 {
                     let mut el = p_el.lock().await;
                     *el = 0.0;
                 }
 
+                let app_weak_ui = app_weak.clone();
+                let tid_copy = tid.clone();
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
                     ui.set_is_playing(true);
                     ui.set_current_time("0:00".into());
@@ -784,14 +863,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut found_idx = -1;
                     let mut updated_tracks = Vec::new();
                     let mut dur_secs = 210.0;
+                    let mut track_cover_url = String::new();
 
                     for idx in 0..tracks_model.row_count() {
                         if let Some(mut track) = tracks_model.row_data(idx) {
-                            if track.id == tid {
+                            if track.id == tid_copy {
                                 track.is_playing = true;
                                 found_idx = idx as i32;
                                 ui.set_active_track_title(track.title.clone());
                                 ui.set_active_track_artist(track.artist.clone());
+                                track_cover_url = track.image_url.to_string();
+                                if let Some(path) = get_cached_image_path(&track_cover_url) {
+                                    if let Ok(img) = slint::Image::load_from_path(&path) {
+                                        ui.set_current_track_cover(img);
+                                        ui.set_has_current_track_cover(true);
+                                    } else {
+                                        ui.set_has_current_track_cover(false);
+                                    }
+                                } else {
+                                    ui.set_has_current_track_cover(false);
+                                }
                                 if !track.duration_str.is_empty() {
                                     ui.set_total_time(track.duration_str.clone());
                                     dur_secs = parse_duration_to_secs(&track.duration_str);
@@ -805,6 +896,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     if found_idx >= 0 {
                         ui.set_current_tracks(ModelRc::new(VecModel::from(updated_tracks)));
+                    }
+
+                    if !track_cover_url.is_empty() {
+                        let app_weak_c = app_weak_ui.clone();
+                        let u_copy = track_cover_url.clone();
+                        tokio::spawn(async move {
+                            if let Some(path) = load_image_path_async(&u_copy).await {
+                                let _ = app_weak_c.upgrade_in_event_loop(move |ui| {
+                                    if let Ok(img) = slint::Image::load_from_path(&path) {
+                                        ui.set_current_track_cover(img);
+                                        ui.set_has_current_track_cover(true);
+                                    }
+                                });
+                            }
+                        });
                     }
 
                     let a_idx_inner = Arc::clone(&a_idx);
@@ -843,29 +949,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 if let Some(client) = maybe_client {
-                    let mut found_title = format!("Медиатека {}", id);
+                    let mut found_title = "Плейлист".to_string();
+                    let mut found_creator = "Spotify".to_string();
+                    let mut found_type = "Плейлист".to_string();
+                    let mut found_image_url = String::new();
                     let mut item_type = 0; // 0=playlist, 1=album, 2=artist
 
                     {
                         let p = cached_p.lock().await;
                         if let Some(item) = p.iter().find(|x| x.id == id) {
                             found_title = item.title.to_string();
+                            found_creator = item.subtitle.to_string();
+                            found_image_url = item.image_url.to_string();
+                            found_type = if item.item_type == 3 {
+                                "Подборка".to_string()
+                            } else {
+                                "Плейлист".to_string()
+                            };
                             item_type = item.item_type;
                         }
                     }
-                    if item_type == 0 && !found_title.contains("Медиатека") {
-                        // Already resolved title
+                    if item_type != 0 || found_title != "Плейлист" {
+                        // Already resolved title from playlists
                     } else {
                         let alb = cached_alb.lock().await;
                         if let Some(item) = alb.iter().find(|x| x.id == id) {
                             found_title = item.title.to_string();
+                            found_creator = item.subtitle.to_string();
+                            found_image_url = item.image_url.to_string();
+                            found_type = "Альбом".to_string();
                             item_type = 1;
                         }
                     }
-                    if item_type == 0 && found_title.starts_with("Медиатека") {
+                    if item_type == 0 && found_title == "Плейлист" {
                         let art = cached_art.lock().await;
                         if let Some(item) = art.iter().find(|x| x.id == id) {
                             found_title = item.title.to_string();
+                            found_creator = item.subtitle.to_string();
+                            found_image_url = item.image_url.to_string();
+                            found_type = "Исполнитель".to_string();
                             item_type = 2;
                         }
                     }
@@ -879,26 +1001,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match tracks_res {
                         Ok(tracks) => {
                             let slint_tracks: Vec<TrackItem> = tracks.into_iter().map(|t| {
-                                TrackItem {
-                                    id: t.id.into(),
-                                    index: t.index,
-                                    title: t.title.into(),
-                                    artist: t.artist.into(),
-                                    album: t.album.into(),
-                                    duration_str: t.duration_str.into(),
-                                    play_count_str: "".into(),
-                                    is_liked: false,
-                                    is_playing: false,
-                                    image_url: "".into(),
-                                }
+                                make_track_item(t.id, t.index, t.title, t.artist, t.album, t.duration_str, "".to_string(), false, false, t.image_url)
                             }).collect();
 
                             let title_copy = found_title.clone();
+                            let creator_copy = found_creator.clone();
+                            let type_copy = found_type.clone();
+                            let cached_path = get_cached_image_path(&found_image_url);
+                            let has_cover = cached_path.is_some();
+
                             let _ = app_weak.upgrade_in_event_loop(move |ui| {
                                 ui.set_current_workspace(1);
                                 ui.set_current_album_title(title_copy.into());
+                                ui.set_current_album_creator(creator_copy.into());
+                                ui.set_current_album_type(type_copy.into());
+                                if let Some(path) = &cached_path {
+                                    if let Ok(img) = slint::Image::load_from_path(path) {
+                                        ui.set_current_album_cover(img);
+                                        ui.set_has_current_album_cover(true);
+                                    } else {
+                                        ui.set_has_current_album_cover(false);
+                                    }
+                                } else {
+                                    ui.set_has_current_album_cover(false);
+                                }
                                 ui.set_current_tracks(ModelRc::new(VecModel::from(slint_tracks)));
                             });
+
+                            if !found_image_url.is_empty() && !has_cover {
+                                let url_copy = found_image_url.clone();
+                                let app_weak_c = app_weak.clone();
+                                tokio::spawn(async move {
+                                    if let Some(path) = load_image_path_async(&url_copy).await {
+                                        let _ = app_weak_c.upgrade_in_event_loop(move |ui| {
+                                            if let Ok(img) = slint::Image::load_from_path(&path) {
+                                                ui.set_current_album_cover(img);
+                                                ui.set_has_current_album_cover(true);
+                                            }
+                                        });
+                                    }
+                                });
+                            }
                         }
                         Err(e) => {
                             error!("[API ERROR] Failed to fetch tracks for item '{}': {}", id, e);
@@ -1054,7 +1197,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         info!("[AUTH] Authentication successful for '{}'", email_str);
 
                         // Connect playback engine
-                        engine.init_session(session.clone()).await;
+                        let creds = librespot::core::authentication::Credentials::with_password(&email_str, &pass_str);
+                        engine.init_session(session.clone(), creds).await;
 
                         // Save credentials locally for auto-login
                         if let Err(e) = save_credentials(&SavedCredentials {
@@ -1156,14 +1300,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         info!("[AUTH SUCCESS] Browser OAuth succeeded!");
 
                         let username = session.username().to_string();
-                        let client = SpotifyApiClient::new(access_token, username.clone());
+                        let client = SpotifyApiClient::new(access_token.clone(), username.clone());
                         {
                             let mut guard = api_client_lock.lock().await;
                             *guard = Some(client.clone());
                         }
 
                         // Connect playback engine
-                        engine.init_session(session.clone()).await;
+                        let creds = librespot::core::authentication::Credentials::with_access_token(&access_token);
+                        engine.init_session(session.clone(), creds).await;
 
                         // Immediately mark user authenticated and close login dialog
                         let u_name = username.clone();
@@ -1295,10 +1440,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         info!("[STARTUP SUCCESS] Auto-login succeeded for '{}'", saved.username);
 
                         // Connect playback engine
-                        engine.init_session(session.clone()).await;
+                        let creds = librespot::core::authentication::Credentials::with_access_token(&access_token);
+                        engine.init_session(session.clone(), creds).await;
 
                         let username = session.username().to_string();
-                        let client = SpotifyApiClient::new(access_token, username.clone());
+                        let client = SpotifyApiClient::new(access_token.clone(), username.clone());
                         {
                             let mut guard = api_client_lock.lock().await;
                             *guard = Some(client.clone());

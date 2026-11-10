@@ -9,7 +9,7 @@ repository = "https://github.com/darakcheeff/spotify-light"
 
 [dependencies]
 # UI Framework
-slint = { version = "1.9", default-features = false, features = ["compat-1-2", "backend-winit", "renderer-femtovg"] }
+slint = { version = "1.9", default-features = false, features = ["compat-1-2", "backend-winit", "renderer-femtovg", "image-default-formats"] }
 
 # Async runtime
 tokio = { version = "1.40", features = ["full"] }

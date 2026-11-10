@@ -1,5 +1,5 @@
 use slint::ComponentHandle;
-use tracing::{error, info, warn};
+use tracing::info;
 use zbus::{connection::Builder, interface};
 
 pub struct TrayService {

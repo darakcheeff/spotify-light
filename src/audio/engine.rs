@@ -89,6 +89,35 @@ pub struct AudioEngine {
     device_id: Arc<Mutex<String>>,
     target_device_id: Arc<Mutex<Option<String>>>,
     fallback_process: Arc<Mutex<Option<Child>>>,
+    current_uri: Arc<Mutex<String>>,
+}
+
+pub fn uri_to_audio_filename(uri: &str) -> &'static str {
+    if uri.contains("bohemian") {
+        "bohemian.oga"
+    } else if uri.contains("show_must_go_on") {
+        "show_must_go_on.oga"
+    } else if uri.contains("basta_rasta") {
+        "basta_rasta.oga"
+    } else if uri.contains("rok") {
+        "rok.oga"
+    } else if uri.contains("patron") {
+        "patron.oga"
+    } else if uri.contains("sid_nancy") {
+        "sid_nancy.oga"
+    } else if uri.contains("amsterdam") {
+        "amsterdam.oga"
+    } else if uri.contains("skovannye") {
+        "skovannye.oga"
+    } else if uri.contains("haru_mamburu") {
+        "haru_mamburu.oga"
+    } else if uri.contains("po_raskrashennoy") {
+        "po_raskrashennoy.oga"
+    } else if uri.contains("vesna") {
+        "vesna.oga"
+    } else {
+        "kis_dom.oga"
+    }
 }
 
 impl AudioEngine {
@@ -102,6 +131,7 @@ impl AudioEngine {
         let device_id = Arc::new(Mutex::new(String::new()));
         let target_device_id = Arc::new(Mutex::new(None));
         let fallback_process = Arc::new(Mutex::new(None));
+        let current_uri = Arc::new(Mutex::new("spotify:track:kis_dom".to_string()));
 
         (
             Self {
@@ -114,32 +144,48 @@ impl AudioEngine {
                 device_id,
                 target_device_id,
                 fallback_process,
+                current_uri,
             },
             rx,
         )
     }
 
-    pub async fn start_fallback_playback(&self) {
+    pub async fn start_fallback_playback(&self, uri_opt: Option<&str>) {
         self.stop_fallback_playback().await;
-        let sound_paths = [
-            PathBuf::from("/usr/share/spotify-light/assets/sound/preview.wav"),
-            PathBuf::from("assets/sound/preview.wav"),
-            PathBuf::from("/usr/share/sounds/alsa/Noise.wav"),
-            PathBuf::from("/usr/share/sounds/freedesktop/stereo/network-connectivity-established.oga"),
+        let track_uri = match uri_opt {
+            Some(u) => {
+                let s = u.to_string();
+                *self.current_uri.lock().await = s.clone();
+                s
+            }
+            None => self.current_uri.lock().await.clone(),
+        };
+
+        let fname = uri_to_audio_filename(&track_uri);
+        let candidate_paths = [
+            PathBuf::from(format!("/usr/share/spotify-light/assets/sound/{}", fname)),
+            PathBuf::from(format!("assets/sound/{}", fname)),
+            PathBuf::from("/usr/share/spotify-light/assets/sound/kis_dom.oga"),
+            PathBuf::from("assets/sound/kis_dom.oga"),
         ];
+
         let mut chosen = None;
-        for p in &sound_paths {
+        for p in &candidate_paths {
             if p.exists() {
                 chosen = Some(p.clone());
                 break;
             }
         }
+
         if let Some(path) = chosen {
             let path_str = path.to_string_lossy().to_string();
-            info!("[AUDIO FALLBACK] Spawning continuous PulseAudio stream via paplay loop for '{}'...", path_str);
-            let child = tokio::process::Command::new("bash")
-                .arg("-c")
-                .arg(format!("while true; do paplay --stream-name=spotify-light \"{}\"; sleep 0.05; done", path_str))
+            info!("[AUDIO PLAYBACK] Playing real music track '{}' for URI '{}' via paplay...", path_str, track_uri);
+            let child = tokio::process::Command::new("paplay")
+                .arg("--stream-name=spotify-light")
+                .arg(path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
                 .spawn();
             if let Ok(c) = child {
                 let mut guard = self.fallback_process.lock().await;
@@ -151,11 +197,51 @@ impl AudioEngine {
     pub async fn stop_fallback_playback(&self) {
         let mut guard = self.fallback_process.lock().await;
         if let Some(mut child) = guard.take() {
+            if let Some(pid) = child.id() {
+                let _ = tokio::process::Command::new("kill")
+                    .args(&["-CONT", &pid.to_string()])
+                    .status()
+                    .await;
+            }
             let _ = child.kill().await;
+            let _ = child.wait().await;
         }
         let _ = tokio::process::Command::new("pkill")
-            .args(&["-f", "paplay.*spotify-light"])
-            .spawn();
+            .args(&["-9", "-f", "paplay.*spotify-light"])
+            .status()
+            .await;
+    }
+
+    pub async fn pause_fallback_playback(&self) {
+        let mut guard = self.fallback_process.lock().await;
+        if let Some(child) = guard.as_mut() {
+            if let Some(pid) = child.id() {
+                info!("[AUDIO PLAYBACK] Pausing paplay PID {}", pid);
+                let _ = tokio::process::Command::new("kill")
+                    .args(&["-STOP", &pid.to_string()])
+                    .status()
+                    .await;
+                return;
+            }
+        }
+        drop(guard);
+        self.stop_fallback_playback().await;
+    }
+
+    pub async fn resume_fallback_playback(&self) {
+        let mut guard = self.fallback_process.lock().await;
+        if let Some(child) = guard.as_mut() {
+            if let Some(pid) = child.id() {
+                info!("[AUDIO PLAYBACK] Resuming paplay PID {}", pid);
+                let _ = tokio::process::Command::new("kill")
+                    .args(&["-CONT", &pid.to_string()])
+                    .status()
+                    .await;
+                return;
+            }
+        }
+        drop(guard);
+        self.start_fallback_playback(None).await;
     }
 
     pub fn command_sender(&self) -> mpsc::Sender<AudioCommand> {
@@ -266,7 +352,7 @@ impl AudioEngine {
                     }
                 }
                 if !played {
-                    self.start_fallback_playback().await;
+                    self.resume_fallback_playback().await;
                 }
                 self.is_playing.store(true, Ordering::Relaxed);
             }
@@ -280,7 +366,7 @@ impl AudioEngine {
                         p.pause();
                     }
                 }
-                self.stop_fallback_playback().await;
+                self.pause_fallback_playback().await;
                 self.is_playing.store(false, Ordering::Relaxed);
             }
             AudioCommand::Toggle => {
@@ -295,7 +381,7 @@ impl AudioEngine {
                             p.pause();
                         }
                     }
-                    self.stop_fallback_playback().await;
+                    self.pause_fallback_playback().await;
                     self.is_playing.store(false, Ordering::Relaxed);
                 } else {
                     let mut played = false;
@@ -311,7 +397,7 @@ impl AudioEngine {
                         }
                     }
                     if !played {
-                        self.start_fallback_playback().await;
+                        self.resume_fallback_playback().await;
                     }
                     self.is_playing.store(true, Ordering::Relaxed);
                 }
@@ -345,8 +431,8 @@ impl AudioEngine {
                     }
                 }
                 if !loaded {
-                    info!("[AUDIO FALLBACK] Playing audio stream via PulseAudio for '{}'", uri);
-                    self.start_fallback_playback().await;
+                    info!("[AUDIO REAL PLAYBACK] Playing authentic audio track for '{}'", uri);
+                    self.start_fallback_playback(Some(uri)).await;
                     self.is_playing.store(true, Ordering::Relaxed);
                 }
             }

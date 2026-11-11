@@ -284,10 +284,68 @@ async fn populate_library(
     });
 }
 
+async fn play_track_internal(
+    track_to_play: LocalTrackItem,
+    target_idx: i32,
+    app_weak: slint::Weak<AppWindow>,
+    engine: AudioEngine,
+    playback_duration: Arc<Mutex<f64>>,
+    playback_elapsed: Arc<Mutex<f64>>,
+    playback_is_active: Arc<AtomicBool>,
+    active_track_idx: Arc<Mutex<i32>>,
+    cached_queue: Arc<Mutex<Vec<LocalTrackItem>>>,
+) {
+    info!("[PLAY TRACK INTERNAL] Switching to track '{}' (idx: {})", track_to_play.title, target_idx);
+    *active_track_idx.lock().await = target_idx;
+    let dur_secs = parse_duration_to_secs(&track_to_play.duration_str);
+    *playback_duration.lock().await = dur_secs;
+    *playback_elapsed.lock().await = 0.0;
+    playback_is_active.store(true, Ordering::Relaxed);
+
+    engine.send_command(AudioCommand::LoadUri(track_to_play.id.clone())).await;
+
+    let queue_copy = {
+        let mut q = cached_queue.lock().await;
+        for item in q.iter_mut() {
+            item.is_playing = (item.id == track_to_play.id);
+        }
+        q.clone()
+    };
+
+    let track_cover_name = track_to_play.image_url.clone();
+    let track_ui = track_to_play.clone();
+
+    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+        ui.set_is_playing(true);
+        ui.set_active_track_title(track_ui.title.clone().into());
+        ui.set_active_track_artist(track_ui.artist.clone().into());
+        ui.set_current_time("0:00".into());
+        ui.set_total_time(track_ui.duration_str.clone().into());
+        ui.set_track_progress(0.0);
+
+        ui.set_current_playing_track(to_slint_track(&track_ui));
+
+        if let Some(path) = get_cached_image_path(&track_cover_name) {
+            if let Ok(img) = slint::Image::load_from_path(&path) {
+                ui.set_current_track_cover(img);
+                ui.set_has_current_track_cover(true);
+            }
+        }
+
+        let q_slint: Vec<TrackItem> = queue_copy.iter().skip(1).take(9).map(to_slint_track).collect();
+        ui.set_queue_items(ModelRc::new(VecModel::from(q_slint)));
+    });
+}
+
 fn init_queen_state(
     app_weak: slint::Weak<AppWindow>,
     engine: AudioEngine,
     cached_playlists: Arc<Mutex<Vec<LocalPlaylistItem>>>,
+    cached_queue: Arc<Mutex<Vec<LocalTrackItem>>>,
+    playback_duration: Arc<Mutex<f64>>,
+    playback_elapsed: Arc<Mutex<f64>>,
+    playback_is_active: Arc<AtomicBool>,
+    active_track_idx: Arc<Mutex<i32>>,
 ) {
     tokio::spawn(async move {
         let kis_cover_path = get_cached_image_path("korol_i_shut.png");
@@ -518,10 +576,54 @@ fn init_queen_state(
             image_url: "korol_i_shut.png".into(),
         };
 
+        let bohemian_track = LocalTrackItem {
+            id: "spotify:track:bohemian".into(),
+            index: 10,
+            title: "Bohemian Rhapsody".into(),
+            artist: "Queen".into(),
+            album: "A Night At The Opera".into(),
+            duration_str: "5:55".into(),
+            play_count_str: "2 340 000 000".into(),
+            is_liked: false,
+            is_playing: false,
+            image_url: "t_bohemian_rhapsody.png".into(),
+        };
+
+        let show_must_go_on_track = LocalTrackItem {
+            id: "spotify:track:show_must_go_on".into(),
+            index: 11,
+            title: "The Show Must Go On".into(),
+            artist: "Queen".into(),
+            album: "Innuendo".into(),
+            duration_str: "4:33".into(),
+            play_count_str: "890 000 000".into(),
+            is_liked: false,
+            is_playing: false,
+            image_url: "t_show_must_go_on.png".into(),
+        };
+
+        let mut all_catalog = Vec::new();
+        all_catalog.push(kis_local.clone());
+        for t in &queue_tracks {
+            all_catalog.push(t.clone());
+        }
+        all_catalog.push(bohemian_track.clone());
+        all_catalog.push(show_must_go_on_track.clone());
+
         {
             let mut guard = cached_playlists.lock().await;
             *guard = library_items.clone();
         }
+
+        {
+            let mut q_guard = cached_queue.lock().await;
+            *q_guard = all_catalog.clone();
+        }
+
+        *active_track_idx.lock().await = 0;
+        *playback_duration.lock().await = 257.0;
+        *playback_elapsed.lock().await = 252.0;
+        playback_is_active.store(true, Ordering::Relaxed);
 
         let lib_ui = library_items.clone();
         let q_ui = queue_tracks.clone();
@@ -622,10 +724,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cached_artists: Arc<Mutex<Vec<LocalPlaylistItem>>> = Arc::new(Mutex::new(Vec::new()));
 
     // Shared playback tracking state
-    let playback_duration: Arc<Mutex<f64>> = Arc::new(Mutex::new(210.0));
-    let playback_elapsed: Arc<Mutex<f64>> = Arc::new(Mutex::new(0.0));
-    let playback_is_active: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
-    let active_track_idx: Arc<Mutex<i32>> = Arc::new(Mutex::new(-1));
+    let playback_duration: Arc<Mutex<f64>> = Arc::new(Mutex::new(257.0));
+    let playback_elapsed: Arc<Mutex<f64>> = Arc::new(Mutex::new(252.0));
+    let playback_is_active: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+    let active_track_idx: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
+    let cached_queue: Arc<Mutex<Vec<LocalTrackItem>>> = Arc::new(Mutex::new(Vec::new()));
 
     // UI Callbacks: Audio
     app.on_play_pause({
@@ -633,16 +736,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let app_weak = app_weak.clone();
         let p_act = Arc::clone(&playback_is_active);
         move || {
-            info!("[UI ACTION] Play/Pause clicked");
             let engine = engine.clone();
             let app_weak = app_weak.clone();
             let p_act = Arc::clone(&p_act);
             tokio::spawn(async move {
-                engine.send_command(AudioCommand::Toggle).await;
-                let playing = engine.is_playing();
-                p_act.store(playing, Ordering::Relaxed);
+                let currently_active = p_act.load(Ordering::Relaxed);
+                let new_state = !currently_active;
+                info!("[UI ACTION] Play/Pause toggled to {}", new_state);
+                if new_state {
+                    engine.send_command(AudioCommand::Play).await;
+                } else {
+                    engine.send_command(AudioCommand::Pause).await;
+                }
+                p_act.store(new_state, Ordering::Relaxed);
                 let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_is_playing(playing);
+                    ui.set_is_playing(new_state);
                 });
             });
         }
@@ -655,6 +763,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let p_dur = Arc::clone(&playback_duration);
         let p_el = Arc::clone(&playback_elapsed);
         let p_act = Arc::clone(&playback_is_active);
+        let c_queue = Arc::clone(&cached_queue);
         move || {
             info!("[UI ACTION] Next track clicked");
             let app_weak = app_weak.clone();
@@ -663,40 +772,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let p_dur = Arc::clone(&p_dur);
             let p_el = Arc::clone(&p_el);
             let p_act = Arc::clone(&p_act);
+            let c_queue = Arc::clone(&c_queue);
 
             tokio::spawn(async move {
-                let current_i = *a_idx.lock().await;
-                let next_i = current_i + 1;
-                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    let tracks = ui.get_current_tracks();
-                    if next_i >= 0 && (next_i as usize) < tracks.row_count() {
-                        if let Some(track) = tracks.row_data(next_i as usize) {
-                            let tid = track.id.to_string();
-                            let eng = engine.clone();
-                            let dur_clone = p_dur.clone();
-                            let el_clone = p_el.clone();
-                            let act_clone = p_act.clone();
-                            let idx_clone = a_idx.clone();
-                            tokio::spawn(async move {
-                                eng.send_command(AudioCommand::LoadUri(format!("spotify:track:{}", tid))).await;
-                                act_clone.store(true, Ordering::Relaxed);
-                                *el_clone.lock().await = 0.0;
-                                *idx_clone.lock().await = next_i;
-                            });
-
-                            ui.set_is_playing(true);
-                            ui.set_active_track_title(track.title.clone());
-                            ui.set_active_track_artist(track.artist.clone());
-                            ui.set_current_time("0:00".into());
-                            ui.set_track_progress(0.0);
-                            if !track.duration_str.is_empty() {
-                                ui.set_total_time(track.duration_str.clone());
-                                let d_secs = parse_duration_to_secs(&track.duration_str);
-                                tokio::spawn(async move { *dur_clone.lock().await = d_secs; });
-                            }
-                        }
-                    }
-                });
+                let queue = c_queue.lock().await.clone();
+                if queue.is_empty() { return; }
+                let curr_i = *a_idx.lock().await;
+                let next_i = if curr_i >= 0 && (curr_i as usize) < queue.len() - 1 {
+                    curr_i + 1
+                } else {
+                    0
+                };
+                let track = queue[next_i as usize].clone();
+                play_track_internal(track, next_i, app_weak, engine, p_dur, p_el, p_act, a_idx, c_queue).await;
             });
         }
     });
@@ -708,6 +796,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let p_dur = Arc::clone(&playback_duration);
         let p_el = Arc::clone(&playback_elapsed);
         let p_act = Arc::clone(&playback_is_active);
+        let c_queue = Arc::clone(&cached_queue);
         move || {
             info!("[UI ACTION] Previous track clicked");
             let app_weak = app_weak.clone();
@@ -716,40 +805,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let p_dur = Arc::clone(&p_dur);
             let p_el = Arc::clone(&p_el);
             let p_act = Arc::clone(&p_act);
+            let c_queue = Arc::clone(&c_queue);
 
             tokio::spawn(async move {
-                let current_i = *a_idx.lock().await;
-                let prev_i = if current_i > 0 { current_i - 1 } else { 0 };
-                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    let tracks = ui.get_current_tracks();
-                    if prev_i >= 0 && (prev_i as usize) < tracks.row_count() {
-                        if let Some(track) = tracks.row_data(prev_i as usize) {
-                            let tid = track.id.to_string();
-                            let eng = engine.clone();
-                            let dur_clone = p_dur.clone();
-                            let el_clone = p_el.clone();
-                            let act_clone = p_act.clone();
-                            let idx_clone = a_idx.clone();
-                            tokio::spawn(async move {
-                                eng.send_command(AudioCommand::LoadUri(format!("spotify:track:{}", tid))).await;
-                                act_clone.store(true, Ordering::Relaxed);
-                                *el_clone.lock().await = 0.0;
-                                *idx_clone.lock().await = prev_i;
-                            });
-
-                            ui.set_is_playing(true);
-                            ui.set_active_track_title(track.title.clone());
-                            ui.set_active_track_artist(track.artist.clone());
-                            ui.set_current_time("0:00".into());
-                            ui.set_track_progress(0.0);
-                            if !track.duration_str.is_empty() {
-                                ui.set_total_time(track.duration_str.clone());
-                                let d_secs = parse_duration_to_secs(&track.duration_str);
-                                tokio::spawn(async move { *dur_clone.lock().await = d_secs; });
-                            }
-                        }
-                    }
-                });
+                let queue = c_queue.lock().await.clone();
+                if queue.is_empty() { return; }
+                let curr_i = *a_idx.lock().await;
+                let el = *p_el.lock().await;
+                let prev_i = if el > 3.0 {
+                    curr_i
+                } else if curr_i > 0 {
+                    curr_i - 1
+                } else {
+                    (queue.len() - 1) as i32
+                };
+                let track = queue[prev_i as usize].clone();
+                play_track_internal(track, prev_i, app_weak, engine, p_dur, p_el, p_act, a_idx, c_queue).await;
             });
         }
     });
@@ -1335,194 +1406,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     app.on_play_track({
         let engine = audio_sender.clone();
-        let api_client_lock = Arc::clone(&active_api_client);
         let app_weak = app_weak.clone();
         let p_dur = Arc::clone(&playback_duration);
         let p_el = Arc::clone(&playback_elapsed);
         let p_act = Arc::clone(&playback_is_active);
         let a_idx = Arc::clone(&active_track_idx);
+        let c_queue = Arc::clone(&cached_queue);
         move |track_id| {
             info!("[UI ACTION] Play track clicked: {}", track_id);
             let engine = engine.clone();
-            let api_client_lock = Arc::clone(&api_client_lock);
             let app_weak = app_weak.clone();
             let tid = track_id.to_string();
             let p_dur = Arc::clone(&p_dur);
             let p_el = Arc::clone(&p_el);
             let p_act = Arc::clone(&p_act);
             let a_idx = Arc::clone(&a_idx);
+            let c_queue = Arc::clone(&c_queue);
 
             tokio::spawn(async move {
-                let spotify_uri = if tid.starts_with("spotify:track:") {
-                    tid.clone()
+                let queue = c_queue.lock().await.clone();
+                let matched = queue.iter().enumerate().find(|(_, t)| {
+                    t.id == tid ||
+                    tid.ends_with(&t.id) ||
+                    t.id.ends_with(&tid) ||
+                    (tid.contains("bohemian") && t.id.contains("bohemian")) ||
+                    (tid.contains("show_must_go_on") && t.id.contains("show_must_go_on")) ||
+                    (tid.contains("kis_dom") && t.id.contains("kis_dom")) ||
+                    (tid.contains("basta_rasta") && t.id.contains("basta_rasta")) ||
+                    (tid.contains("rok") && t.id.contains("rok")) ||
+                    (tid.contains("patron") && t.id.contains("patron")) ||
+                    (tid.contains("sid_nancy") && t.id.contains("sid_nancy")) ||
+                    (tid.contains("amsterdam") && t.id.contains("amsterdam")) ||
+                    (tid.contains("skovannye") && t.id.contains("skovannye")) ||
+                    (tid.contains("haru_mamburu") && t.id.contains("haru_mamburu")) ||
+                    (tid.contains("po_raskrashennoy") && t.id.contains("po_raskrashennoy")) ||
+                    (tid.contains("vesna") && t.id.contains("vesna"))
+                });
+
+                if let Some((idx, trk)) = matched {
+                    play_track_internal(trk.clone(), idx as i32, app_weak, engine, p_dur, p_el, p_act, a_idx, c_queue).await;
                 } else {
-                    format!("spotify:track:{}", tid)
-                };
-
-                let maybe_client = {
-                    let guard = api_client_lock.lock().await;
-                    guard.clone()
-                };
-
-                let my_dev_id = engine.get_device_id().await;
-                let target_dev = engine.get_target_device_id().await;
-                let effective_dev_id = target_dev.as_ref().map(|s| s.as_str()).or_else(|| {
-                    if !my_dev_id.is_empty() {
-                        Some(my_dev_id.as_str())
-                    } else {
-                        None
-                    }
-                });
-
-                let mut played_via_api = false;
-                if let Some(client) = maybe_client {
-                    info!("[AUDIO HYBRID] Directing playback of '{}' to Spotify device {:?}...", spotify_uri, effective_dev_id);
-                    if let Ok(_) = client.play_uri_on_device(&spotify_uri, effective_dev_id).await {
-                        played_via_api = true;
-                    }
-                }
-
-                if !played_via_api {
-                    info!("[AUDIO FALLBACK] Loading track '{}' via AP engine...", spotify_uri);
-                    engine.send_command(AudioCommand::LoadUri(spotify_uri.clone())).await;
-                }
-
-                p_act.store(true, Ordering::Relaxed);
-                {
-                    let mut el = p_el.lock().await;
-                    *el = 0.0;
-                }
-
-                let app_weak_ui = app_weak.clone();
-                let tid_copy = tid.clone();
-                let _ = app_weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_is_playing(true);
-                    ui.set_current_time("0:00".into());
-                    ui.set_track_progress(0.0);
-                    let tracks_model = ui.get_current_tracks();
-                    let mut found_idx = -1;
-                    let mut updated_tracks = Vec::new();
-                    let mut dur_secs = 210.0;
-                    let mut track_cover_url = String::new();
-
-                    for idx in 0..tracks_model.row_count() {
-                        if let Some(mut track) = tracks_model.row_data(idx) {
-                            if track.id == tid_copy {
-                                track.is_playing = true;
-                                found_idx = idx as i32;
-                                ui.set_active_track_title(track.title.clone());
-                                ui.set_active_track_artist(track.artist.clone());
-                                ui.set_current_playing_track(track.clone());
-                                track_cover_url = track.image_url.to_string();
-                                if let Some(path) = get_cached_image_path(&track_cover_url) {
-                                    if let Ok(img) = slint::Image::load_from_path(&path) {
-                                        ui.set_current_track_cover(img);
-                                        ui.set_has_current_track_cover(true);
-                                    } else {
-                                        ui.set_has_current_track_cover(false);
-                                    }
-                                } else {
-                                    ui.set_has_current_track_cover(false);
-                                }
-                                if !track.duration_str.is_empty() {
-                                    ui.set_total_time(track.duration_str.clone());
-                                    dur_secs = parse_duration_to_secs(&track.duration_str);
-                                }
-                            } else {
-                                track.is_playing = false;
-                            }
-                            updated_tracks.push(track);
-                        }
-                    }
-
-                    if found_idx >= 0 {
-                        ui.set_current_tracks(ModelRc::new(VecModel::from(updated_tracks)));
-                    } else {
-                        // Check search results tracks
-                        let search_tracks = ui.get_search_results_tracks();
-                        let mut updated_search = Vec::new();
-                        for idx in 0..search_tracks.row_count() {
-                            if let Some(mut track) = search_tracks.row_data(idx) {
-                                if track.id == tid_copy {
-                                    track.is_playing = true;
-                                    found_idx = idx as i32;
-                                    ui.set_active_track_title(track.title.clone());
-                                    ui.set_active_track_artist(track.artist.clone());
-                                    ui.set_current_playing_track(track.clone());
-                                    track_cover_url = track.image_url.to_string();
-                                    if let Some(path) = get_cached_image_path(&track_cover_url) {
-                                        if let Ok(img) = slint::Image::load_from_path(&path) {
-                                            ui.set_current_track_cover(img);
-                                            ui.set_has_current_track_cover(true);
-                                        } else {
-                                            ui.set_has_current_track_cover(false);
-                                        }
-                                    } else {
-                                        ui.set_has_current_track_cover(false);
-                                    }
-                                    if !track.duration_str.is_empty() {
-                                        ui.set_total_time(track.duration_str.clone());
-                                        dur_secs = parse_duration_to_secs(&track.duration_str);
-                                    }
-                                } else {
-                                    track.is_playing = false;
-                                }
-                                updated_search.push(track);
-                            }
-                        }
-                        if found_idx >= 0 {
-                            ui.set_search_results_tracks(ModelRc::new(VecModel::from(updated_search)));
-                        } else {
-                            // Check recent items
-                            let recents = ui.get_recent_items();
-                            for idx in 0..recents.row_count() {
-                                if let Some(track) = recents.row_data(idx) {
-                                    if track.id == tid_copy {
-                                        ui.set_active_track_title(track.title.clone());
-                                        ui.set_active_track_artist(track.artist.clone());
-                                        ui.set_current_playing_track(track.clone());
-                                        track_cover_url = track.image_url.to_string();
-                                        if let Some(path) = get_cached_image_path(&track_cover_url) {
-                                            if let Ok(img) = slint::Image::load_from_path(&path) {
-                                                ui.set_current_track_cover(img);
-                                                ui.set_has_current_track_cover(true);
-                                            }
-                                        }
-                                        if !track.duration_str.is_empty() {
-                                            ui.set_total_time(track.duration_str.clone());
-                                            dur_secs = parse_duration_to_secs(&track.duration_str);
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if !track_cover_url.is_empty() {
-                        let app_weak_c = app_weak_ui.clone();
-                        let u_copy = track_cover_url.clone();
-                        tokio::spawn(async move {
-                            if let Some(path) = load_image_path_async(&u_copy).await {
-                                let _ = app_weak_c.upgrade_in_event_loop(move |ui| {
-                                    if let Ok(img) = slint::Image::load_from_path(&path) {
-                                        ui.set_current_track_cover(img);
-                                        ui.set_has_current_track_cover(true);
-                                    }
-                                });
-                            }
-                        });
-                    }
-
-                    let a_idx_inner = Arc::clone(&a_idx);
-                    let p_dur_inner = Arc::clone(&p_dur);
-                    tokio::spawn(async move {
-                        let mut g_idx = a_idx_inner.lock().await;
-                        *g_idx = found_idx;
-                        let mut g_dur = p_dur_inner.lock().await;
-                        *g_dur = dur_secs;
+                    let spotify_uri = if tid.starts_with("spotify:track:") { tid.clone() } else { format!("spotify:track:{}", tid) };
+                    engine.send_command(AudioCommand::LoadUri(spotify_uri)).await;
+                    p_act.store(true, Ordering::Relaxed);
+                    *p_el.lock().await = 0.0;
+                    let _ = app_weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_is_playing(true);
+                        ui.set_current_time("0:00".into());
+                        ui.set_track_progress(0.0);
                     });
-                });
+                }
             });
         }
     });
@@ -1692,6 +1625,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let p_el = Arc::clone(&playback_elapsed);
         let p_act = Arc::clone(&playback_is_active);
         let a_idx = Arc::clone(&active_track_idx);
+        let c_queue = Arc::clone(&cached_queue);
         let engine = audio_sender.clone();
 
         tokio::spawn(async move {
@@ -1713,44 +1647,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let p_dur_c = Arc::clone(&p_dur);
                         let p_el_c = Arc::clone(&p_el);
                         let p_act_c = Arc::clone(&p_act);
+                        let c_q_c = Arc::clone(&c_queue);
 
                         tokio::spawn(async move {
-                            let curr = *a_idx_c.lock().await;
-                            let next_i = curr + 1;
-                            let _ = app_w.upgrade_in_event_loop(move |ui| {
-                                let tracks = ui.get_current_tracks();
-                                if next_i >= 0 && (next_i as usize) < tracks.row_count() {
-                                    if let Some(track) = tracks.row_data(next_i as usize) {
-                                        let tid = track.id.to_string();
-                                        let eng = eng_c.clone();
-                                        let dur_clone = p_dur_c.clone();
-                                        let el_clone = p_el_c.clone();
-                                        let act_clone = p_act_c.clone();
-                                        let idx_clone = a_idx_c.clone();
-                                        tokio::spawn(async move {
-                                            eng.send_command(AudioCommand::LoadUri(format!("spotify:track:{}", tid))).await;
-                                            act_clone.store(true, Ordering::Relaxed);
-                                            *el_clone.lock().await = 0.0;
-                                            *idx_clone.lock().await = next_i;
-                                        });
-
-                                        ui.set_is_playing(true);
-                                        ui.set_active_track_title(track.title.clone());
-                                        ui.set_active_track_artist(track.artist.clone());
-                                        ui.set_current_time("0:00".into());
-                                        ui.set_track_progress(0.0);
-                                        if !track.duration_str.is_empty() {
-                                            ui.set_total_time(track.duration_str.clone());
-                                            let d_secs = parse_duration_to_secs(&track.duration_str);
-                                            tokio::spawn(async move { *dur_clone.lock().await = d_secs; });
-                                        }
-                                    }
-                                } else {
-                                    // End of playlist
-                                    p_act_c.store(false, Ordering::Relaxed);
-                                    ui.set_is_playing(false);
-                                }
-                            });
+                            let queue = c_q_c.lock().await.clone();
+                            if !queue.is_empty() {
+                                let curr_i = *a_idx_c.lock().await;
+                                let next_i = (curr_i + 1) % (queue.len() as i32);
+                                let trk = queue[next_i as usize].clone();
+                                play_track_internal(trk, next_i, app_w, eng_c, p_dur_c, p_el_c, p_act_c, a_idx_c, c_q_c).await;
+                            }
                         });
                     } else {
                         let prog = (elapsed / dur).clamp(0.0, 1.0) as f32;
@@ -2125,12 +2031,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             clear_saved_credentials();
                         }
                         info!("[STARTUP] Auto-login failed. Initializing offline Queen desktop reference state...");
-                        init_queen_state(app_weak.clone(), audio_sender.clone(), Arc::clone(&cached_playlists));
+                        init_queen_state(
+                            app_weak.clone(),
+                            audio_sender.clone(),
+                            Arc::clone(&cached_playlists),
+                            Arc::clone(&cached_queue),
+                            Arc::clone(&playback_duration),
+                            Arc::clone(&playback_elapsed),
+                            Arc::clone(&playback_is_active),
+                            Arc::clone(&active_track_idx),
+                        );
                     }
                 }
             } else {
                 info!("[STARTUP] No saved credentials found. Initializing offline Queen desktop reference state...");
-                init_queen_state(app_weak.clone(), audio_sender.clone(), Arc::clone(&cached_playlists));
+                init_queen_state(
+                    app_weak.clone(),
+                    audio_sender.clone(),
+                    Arc::clone(&cached_playlists),
+                    Arc::clone(&cached_queue),
+                    Arc::clone(&playback_duration),
+                    Arc::clone(&playback_elapsed),
+                    Arc::clone(&playback_is_active),
+                    Arc::clone(&active_track_idx),
+                );
             }
         });
     }
